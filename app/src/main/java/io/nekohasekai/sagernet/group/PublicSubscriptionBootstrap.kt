@@ -70,9 +70,8 @@ internal object PublicSubscriptionBootstrap {
                 }
 
                 attachGroup(group.id)
-                if (existing == null || group.subLastUpdate <= 0L) {
-                    SubscriptionQueue.refreshGroup(group.id, showDiff = false, foreground = false)
-                }
+                // SubscriptionScheduler's RemoteCoroutineWorker runs the refresh in the :bg process.
+                // Do not call SubscriptionQueue directly from the main process: its queue is process-local.
                 prefs.edit().putBoolean(KEY_DEFAULTS_INSTALLED, true).apply()
                 SubscriptionScheduler.schedule()
                 Logs.i("[Auto Connect] Default public node source installed; local testing and country filtering are required before connection.")
