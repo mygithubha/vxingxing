@@ -85,6 +85,14 @@ object AutoSelectorProfiles {
     /** profile_start (mainwindow_profile_lifecycle.cpp:206-221): the plan succeeds and wants measurements first. */
     fun needsRanking(id: Long): Boolean {
         val selector = load(id) ?: return false
+        if (hasGeoExclusions(selector)) {
+            val store = SettingsMapper.selectorStore()
+            val hasUnknownCountry = selector.gids.distinct()
+                .flatMap { store.group(it)?.members.orEmpty() }
+                .any { it.testCountry.isBlank() }
+            // An all-unknown pool is intentionally empty until its egress countries have been tested.
+            if (hasUnknownCountry) return true
+        }
         val plan = AutoSelectorPlanner(SettingsMapper.selectorStore()).plan(id, selector)
         return plan.ok && plan.needsRanking
     }
