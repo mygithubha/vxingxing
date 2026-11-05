@@ -200,7 +200,10 @@ object SubscribeFlows {
                 if (gid > 0) {
                     PublicSubscriptionBootstrap.attachGroup(gid)
                     GroupRepo.setCurrent(gid)
-                    onMainDispatcher { notify(activity, "订阅已添加，自动选优配置已就绪。点击首页连接即可测速并连接最佳节点。") }
+                    onMainDispatcher {
+                        notify(activity, "订阅已添加，自动选优配置已就绪。点击首页连接即可测速并连接最佳节点。")
+                        (activity as? MainActivity)?.refreshSimpleConnectHome()
+                    }
                 }
             } catch (e: Exception) {
                 Logs.w(e)
