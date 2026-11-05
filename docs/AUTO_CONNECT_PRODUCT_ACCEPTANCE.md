@@ -13,6 +13,12 @@ App name: Auto Connect.
 5. Background probes must be protected from routing through the VPN tunnel being measured; verify the actual socket/network path and avoid proxy loops.
 6. Network loss, Android process death, OS network handover, and remote server failure are external failure modes. The guarantee is that this app's refresh logic does not itself interrupt a healthy connection.
 
+## App launch
+
+- On a fresh app process, wait for the first subscription import and automatically start the selected mode once nodes are available.
+- Do not start a second connection when the VPN is already running.
+- If no nodes arrive within the bounded startup wait, leave the app usable and show a clear message; the user can retry manually.
+
 ## Automatic mode — Policy A (failure-only failover)
 
 1. Keep the active node and exit IP while the active node is healthy.
