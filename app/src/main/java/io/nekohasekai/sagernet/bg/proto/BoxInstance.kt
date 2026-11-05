@@ -1,0 +1,159 @@
+package io.nekohasekai.sagernet.bg.proto
+
+import io.nekohasekai.sagernet.bg.AbstractInstance
+import io.nekohasekai.sagernet.bg.CoreRuntime
+import io.nekohasekai.sagernet.bg.SingBoxDashboard
+import io.nekohasekai.sagernet.bg.XrayGeoAssets
+import io.nekohasekai.sagernet.database.DataStore
+import io.nekohasekai.sagernet.database.ProxyEntity
+import io.nekohasekai.sagernet.database.RouteManager
+import io.nekohasekai.sagernet.ktx.Logs
+import io.nekohasekai.sagernet.ktx.isLoopbackPortFree
+import io.nekohasekai.sagernet.ktx.mkPort
+import io.nekohasekai.sagernet.ktx.readableMessage
+import io.nekohasekai.sagernet.outbound.config.AutoSelectorBuild
+import io.nekohasekai.sagernet.outbound.config.GeneratedConfig
+import io.nekohasekai.sagernet.outbound.config.PortLease
+import io.nekohasekai.sagernet.outbound.types.Custom
+import io.throneproj.mobile.Instance
+import io.throneproj.mobile.Mobile
+import io.throneproj.mobile.StartOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+
+abstract class BoxInstance(
+    val profile: ProxyEntity
+) : AbstractInstance {
+
+    lateinit var config: GeneratedConfig
+    lateinit var core: CoreConfig
+    lateinit var box: Instance
+
+    val boxOrNull: Instance? get() = if (::box.isInitialized) box else null
+
+    /** This start does not wait for remote rule-sets the core has no copy of ([DeferredRuleSets]). */
+    var deferRuleSets = false
+
+    /** The routing profile [config] was built with (BuildConfigResult::routeId), 0 for a custom full config. */
+    var routeId = 0L
+        private set
+
+    /** The bridge ports [config] listens on (Xray may bind them late), no other box's until [close]. */
+    private val ports = PortLease()
+
+    fun isInitialized(): Boolean {
+        return ::config.isInitialized && ::box.isInitialized
+    }
+
+    protected open fun buildConfig() {
+        // random_inbound_port: a fresh port per start, saved so the app's own requests reach it (mainwindow_setup.cpp:193-196).
+        if (DataStore.randomInboundPort) DataStore.inboundSocksPort = mkPort()
+        // The dashboard is on by default, so another app holding its port must not fail the start: it moves, and the
+        // dashboard screen follows the saved port.
+        if (DataStore.apiDashboardEnabled && !isLoopbackPortFree(DataStore.coreBoxApiPort)) {
+            val port = mkPort()
+            Logs.w("sing-box API port ${DataStore.coreBoxApiPort} is in use, the dashboard moves to $port")
+            DataStore.coreBoxApiPort = port
+        }
+        // A custom full config keeps its own rule-sets as written.
+        if (isCustomFullConfig()) deferRuleSets = false
+        val route = RouteManager.routeFor(profile.groupId)
+        routeId = if (isCustomFullConfig()) 0L else route.id
+        config = CoreConfigs.buildMain(profile, deferRuleSets, ports, route)
+    }
+
+    protected open suspend fun loadConfig() {
+        box = Mobile.newInstance(CoreRuntime.platform, core.toStartOptions(config.autoSelector))
+    }
+
+    open suspend fun init() {
+        buildConfig()
+        core = CoreConfig.from(config, listOf(CoreConfig.TAG_PROXY))
+        CoreRuntime.applyLogLevel(config.coreConfig)
+        ensureXrayAssets()
+        // Before the start: the core downloads the dashboard itself when it finds the dir empty.
+        if (DataStore.apiDashboardEnabled) withContext(Dispatchers.IO) { SingBoxDashboard.install() }
+        if (deferRuleSets) {
+            // The sets' initial_path; without the file the core falls back to fetching during the start.
+            withContext(Dispatchers.IO) {
+                runCatching { DeferredRuleSets.writeEmptySet() }.onFailure { Logs.w("rule-sets: ${it.readableMessage}") }
+            }
+        }
+        loadConfig()
+    }
+
+    /** The geo asset downloads the start waits for; null once they are over. */
+    protected open suspend fun onAssetProgress(progress: XrayGeoAssets.Progress?) {}
+
+    /**
+     * Fetches the data files the Xray configs about to start read (geoip: / geosite: rules) and that are missing;
+     * throws [XrayGeoAssets.DownloadException] naming what could not be had.
+     */
+    private suspend fun ensureXrayAssets() {
+        val configs = listOfNotNull(config.xrayConfig) + config.xrayFullConfigs
+        if (configs.isEmpty()) return
+        val missing = withContext(Dispatchers.IO) { XrayGeoAssets.missing(XrayGeoAssets.needed(configs)) }
+        if (missing.isEmpty()) return
+        val failures = try {
+            XrayGeoAssets.ensure(missing) { onAssetProgress(it) }
+        } finally {
+            withContext(NonCancellable) { runCatching { onAssetProgress(null) } }
+        }
+        if (failures.isNotEmpty()) {
+            throw XrayGeoAssets.DownloadException(
+                failures.values.joinToString("\n"),
+                fetchable = failures.keys.any { it in XrayGeoAssets.FILES },
+            )
+        }
+    }
+
+    override fun launch() {
+        try {
+            box.start()
+        } catch (error: Throwable) {
+            Logs.w("box start failed for profile ${profile.id}: ${error.message}")
+            box.localDNSFailure()?.let { throw LocalDnsFailedException(it.servers, error) }
+            // Not offered again by a start that went without them, nor for a custom full config.
+            if (!deferRuleSets && DeferredRuleSets.isStartFailure(error.message) && !isCustomFullConfig()) {
+                throw RuleSetDownloadFailedException(error)
+            }
+            throw error
+        }
+        CoreRuntime.attachRunning(box, profile.id)
+        if (deferRuleSets) DeferredRuleSets.afterStart(box, config.coreConfig)
+    }
+
+    private fun isCustomFullConfig(): Boolean = (profile.outbound as? Custom)?.isFullConfig() == true
+
+    override fun close() {
+        try {
+            boxOrNull?.let(CoreRuntime::detachRunning)
+            boxOrNull?.close()
+        } finally {
+            ports.close()
+        }
+    }
+
+}
+
+/** A start that failed on the local DNS server; [servers] are the network's DNS servers it asked, empty for Android's resolver. */
+class LocalDnsFailedException(val servers: String, cause: Throwable) : Exception(cause.message, cause)
+
+/** A start that failed on a remote rule-set without a cached copy that could not be downloaded. */
+class RuleSetDownloadFailedException(cause: Throwable) : Exception(cause.message, cause)
+
+internal fun CoreConfig.toStartOptions(autoSelector: AutoSelectorBuild? = null): StartOptions = StartOptions().apply {
+    coreConfig = this@toStartOptions.coreConfig
+    needXray = this@toStartOptions.needXray
+    xrayConfig = this@toStartOptions.xrayConfig ?: ""
+    xrayOutboundDNSStrategy = xrayDnsStrategy
+    this@toStartOptions.xrayFullConfigs.forEach(::addXrayFullConfig)
+    // mainwindow_profile_lifecycle.cpp:231-239: the idle window must outlast the probe interval, or the sidecar
+    // restarts every round; full configs stay resident (0).
+    if (autoSelector != null && (needXray || this@toStartOptions.xrayFullConfigs.isNotEmpty())) {
+        xrayLazyStart = true
+        xrayIdleSeconds = maxOf(120, autoSelector.intervalSec * 2)
+        xrayFullIdleSeconds = 0
+    }
+}

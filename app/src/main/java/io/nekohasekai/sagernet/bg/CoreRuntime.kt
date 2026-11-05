@@ -1,0 +1,136 @@
+package io.nekohasekai.sagernet.bg
+
+import android.app.Application
+import go.Seq
+import io.nekohasekai.sagernet.BuildConfig
+import io.nekohasekai.sagernet.bg.test.TestEngine
+import io.nekohasekai.sagernet.outbound.json.JsonInput
+import io.throneproj.mobile.Instance
+import io.throneproj.mobile.LogSink
+import io.throneproj.mobile.Mobile
+import io.throneproj.mobile.SetupOptions
+import moe.matsuri.nb4a.NativeInterface
+import moe.matsuri.nb4a.utils.CoreLog
+import java.io.File
+
+// Loaded only in the :bg process: everything here pulls the ThroneCore AAR (libthrone.so) in.
+object CoreRuntime {
+
+    /** The core's working dir under filesDir, which relative paths of its config resolve against. */
+    const val WORKING_DIR = "core"
+
+    private const val LOG_QUEUE_LINES = 1024
+
+    val platform: NativeInterface by lazy { NativeInterface() }
+
+    /** The started main instance and the profile it runs, from box start to close (test-current). */
+    class RunningCore(val instance: Instance, val profileId: Long)
+
+    @Volatile
+    var running: RunningCore? = null
+        private set
+
+    @Synchronized
+    fun attachRunning(instance: Instance, profileId: Long) {
+        running = RunningCore(instance, profileId)
+    }
+
+    fun detachRunning(instance: Instance) {
+        val detached = synchronized(this) {
+            (running?.instance === instance).also { if (it) running = null }
+        }
+        if (detached) TestEngine.onRunningClosed()
+    }
+
+    /**
+     * The sing-box level lines must reach to be written. The main box already drops its own lines above the config's
+     * `log.level`, but probe boxes filter by their own config and Go std-log and Xray lines arrive at a fixed level, so
+     * the sink still applies the running config's `log.level` (unset = trace, like sing-box).
+     */
+    @Volatile
+    private var logLevel = Mobile.LogLevelTrace
+
+    fun setup(app: Application) {
+        Seq.setContext(app)
+        CoreLog.newSession()
+        logLevel = CoreLog.logLevel?.let(::levelOf) ?: Mobile.LogLevelWarn
+        Mobile.setup(SetupOptions().apply {
+            basePath = app.filesDir.absolutePath
+            workingPath = File(app.filesDir, WORKING_DIR).absolutePath
+            tempPath = app.cacheDir.absolutePath
+            logMaxLines = LOG_QUEUE_LINES
+            debug = BuildConfig.DEBUG
+        })
+        CoreLog.write("[Info] core: sing-box ${Mobile.version()}, xray ${Mobile.xrayVersion()}, ${Mobile.goVersion()}")
+        Mobile.setLogSink(CoreLogSink)
+    }
+
+    /**
+     * Follows the `log.level` of [coreConfig], the config the main instance is about to run. Only its `log` object is
+     * parsed: a custom full config sets a level of its own, and the rest of the config can be megabytes.
+     */
+    fun applyLogLevel(coreConfig: String) {
+        CoreLog.refreshSettings()
+        logLevel = levelOf(topLevelObject(coreConfig, "log")?.let { JsonInput.parseObject(it).string("level") } ?: "")
+    }
+
+    /** The text of the object under top-level [key] of the JSON object [json]; null when there is no such object. */
+    private fun topLevelObject(json: String, key: String): String? {
+        var depth = 0
+        var objectStart = -1
+        var i = 0
+        while (i < json.length) {
+            when (json[i]) {
+                '"' -> {
+                    val start = i + 1
+                    i = start
+                    while (i < json.length && json[i] != '"') i += if (json[i] == '\\') 2 else 1
+                    if (depth == 1 && objectStart < 0 && i - start == key.length && json.startsWith(key, start)) {
+                        var j = i + 1
+                        while (j < json.length && json[j].isWhitespace()) j++
+                        // A string followed by ':' is a key; a value is followed by ',' or '}'.
+                        if (j < json.length && json[j] == ':') {
+                            j++
+                            while (j < json.length && json[j].isWhitespace()) j++
+                            if (j >= json.length || json[j] != '{') return null
+                            objectStart = j
+                            i = j - 1
+                        }
+                    }
+                }
+                '{', '[' -> depth++
+                '}', ']' -> if (--depth == 1 && objectStart >= 0) return json.substring(objectStart, i + 1)
+            }
+            i++
+        }
+        return null
+    }
+
+    private fun levelOf(level: String): Int = when (level.trim().lowercase()) {
+        "panic" -> Mobile.LogLevelPanic
+        "fatal" -> Mobile.LogLevelFatal
+        "error" -> Mobile.LogLevelError
+        "warn", "warning" -> Mobile.LogLevelWarn
+        "info" -> Mobile.LogLevelInfo
+        "debug" -> Mobile.LogLevelDebug
+        else -> Mobile.LogLevelTrace
+    }
+
+    private object CoreLogSink : LogSink {
+        override fun write(level: Int, message: String) {
+            if (level > logLevel) return
+            CoreLog.write("[${levelName(level)}] $message")
+        }
+
+        private fun levelName(level: Int): String = when (level) {
+            Mobile.LogLevelPanic -> "Panic"
+            Mobile.LogLevelFatal -> "Fatal"
+            Mobile.LogLevelError -> "Error"
+            Mobile.LogLevelWarn -> "Warning"
+            Mobile.LogLevelInfo -> "Info"
+            Mobile.LogLevelDebug -> "Debug"
+            Mobile.LogLevelTrace -> "Trace"
+            else -> "Info"
+        }
+    }
+}
