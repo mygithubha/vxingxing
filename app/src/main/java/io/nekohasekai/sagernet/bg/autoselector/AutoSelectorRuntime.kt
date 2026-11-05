@@ -290,6 +290,15 @@ object AutoSelectorRuntime {
         }
     }
 
+    fun resetFailoverBudget() {
+        synchronized(lock) {
+            lastRebuildRequestMs = 0L
+            rebuildBackoffS = 0
+            rebuildAttempts = 0
+            retryLimitNotified = false
+        }
+    }
+
     fun refreshRun(selectorId: Long) {
         val run = current() ?: return
         if (run.build.selectorId == selectorId) {
