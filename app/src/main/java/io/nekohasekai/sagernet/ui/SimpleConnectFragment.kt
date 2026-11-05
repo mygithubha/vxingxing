@@ -108,7 +108,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                             val excludedCountries = setOf("CN", "HK", "MO", "TW")
                             selector.pool = selector.gids.distinct()
                                 .flatMap { ProfileManager.members(it) }
-                                .filter { it.type != "autoselector" && it.testCountry?.uppercase() !in excludedCountries }
+                                .filter { it.type != "autoselector" && it.testCountry?.uppercase().orEmpty() !in excludedCountries }
                                 .map { it.id }.distinct().toMutableList()
                             selector.poolRankedAt = 0L
                             AutoSelectorProfiles.save(selectorId, selector)
@@ -391,7 +391,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                         val selector = AutoSelectorProfiles.load(selectorId)
                         selector?.gids?.distinct()
                             ?.sumOf { gid -> ProfileManager.members(gid).count { profile ->
-                                profile.type != "autoselector" && profile.testCountry?.uppercase() !in setOf("CN", "HK", "MO", "TW")
+                                profile.type != "autoselector" && profile.testCountry?.uppercase().orEmpty() !in setOf("CN", "HK", "MO", "TW")
                             } }
                             ?: 0
                     } else 0
