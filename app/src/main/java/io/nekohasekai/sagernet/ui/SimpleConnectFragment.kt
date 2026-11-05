@@ -117,7 +117,9 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         updateNodeMonitor(AutoSelectorClient.status.value)
         viewLifecycleOwner.lifecycleScope.launch {
             AutoSelectorClient.status.collect { selectorStatus ->
-                if (selectorStatus.phase == AutoSelectorStatus.PHASE_RUNNING && selectorStatus.selectedId > 0L) {
+                if (selectorStatus.phase == AutoSelectorStatus.PHASE_RUNNING && selectorStatus.selectedId > 0L &&
+                    (selectorStatus.selectedState == AutoSelectorStatus.STATE_OK ||
+                        selectorStatus.selectedState == AutoSelectorStatus.STATE_DEGRADED)) {
                     // Remember the node the core is actually using, including any automatic failover.
                     requireContext().getSharedPreferences("simple_auto_connect", 0).edit()
                         .putLong("last_selector_id", selectorStatus.selectorId)
