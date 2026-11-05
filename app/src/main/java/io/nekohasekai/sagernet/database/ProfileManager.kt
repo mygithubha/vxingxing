@@ -5,6 +5,7 @@ import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.aidl.TrafficData
 import io.nekohasekai.sagernet.ktx.Logs
 import io.nekohasekai.sagernet.outbound.Outbound
+import io.nekohasekai.sagernet.outbound.types.AutoSelector
 import java.io.IOException
 import java.sql.SQLException
 import java.util.concurrent.Callable
@@ -118,11 +119,17 @@ object ProfileManager {
     fun runningUses(profileId: Long): Boolean {
         if (profileId <= 0L) return false
         val running = runningProfileId()
-        // Include the selected target while the service is starting, before currentProfile and
-        // runningProfiles are populated. Once connected, runningProfiles also covers selector members.
-        return profileId == running ||
-            (DataStore.serviceState.started && profileId == DataStore.selectedProxy) ||
-            profileId.toString() in DataStore.runningProfiles
+        if (profileId == running || profileId.toString() in DataStore.runningProfiles) return true
+        if (!DataStore.serviceState.started) return false
+
+        val selectedId = DataStore.selectedProxy
+        if (profileId == selectedId) return true
+
+        // During selector startup the generated config may not yet have populated runningProfiles.
+        // Protect the selector's current pool as well, so a concurrent subscription refresh cannot
+        // delete a member while ConfigGenerator / the core is taking its immutable runtime snapshot.
+        val selector = getProfile(selectedId)?.outbound as? AutoSelector ?: return false
+        return profileId in selector.pool || profileId in selector.lastBuilt
     }
 
     // ------------------------------------------------------------------------------------------------ add
