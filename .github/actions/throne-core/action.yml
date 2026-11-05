@@ -57,15 +57,18 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        echo y | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358"
+        set +o pipefail
+        yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
+        yes | timeout 600s "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358"
+        set -o pipefail
         echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
     - name: Install gomobile
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       run: |
         set -euo pipefail
-        go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.13
-        go install github.com/sagernet/gomobile/cmd/gobind@v0.1.13
+        timeout 300s go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.13
+        timeout 300s go install github.com/sagernet/gomobile/cmd/gobind@v0.1.13
         echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
     - name: Apply Auto Connect failure-only selector policy
       if: steps.cache.outputs.cache-hit != 'true'
@@ -73,7 +76,7 @@ runs:
       working-directory: ${{ env.THRONE_DIR }}/core
       run: |
         set -euo pipefail
-        go mod download github.com/sagernet/sing-box
+        timeout 300s go mod download github.com/sagernet/sing-box
         SING_BOX_SOURCE="$(go list -m -f '{{.Dir}}' github.com/sagernet/sing-box)"
         test -d "$SING_BOX_SOURCE"
         PATCH_DIR="$RUNNER_TEMP/sing-box-auto-connect-policy"
