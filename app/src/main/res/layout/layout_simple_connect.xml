@@ -8,7 +8,7 @@
 <com.google.android.material.textfield.TextInputEditText android:id="@+id/subscription_url" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textUri" android:maxLines="2"/>
 </com.google.android.material.textfield.TextInputLayout>
 <com.google.android.material.button.MaterialButton android:id="@+id/import_subscription" android:layout_width="match_parent" android:layout_height="54dp" android:layout_marginTop="10dp" android:text="导入订阅"/>
-<com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" app:cardCornerRadius="18dp" app:cardElevation="0dp">
+<com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" app:cardCornerRadius="22dp" app:cardElevation="0dp" app:strokeColor="#E9ECF2" app:strokeWidth="1dp">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="18dp">
 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="连接控制" android:textSize="20sp" android:textStyle="bold"/>
 <TextView android:id="@+id/connection_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="等待导入订阅"/>
@@ -25,7 +25,7 @@
 <CheckBox android:id="@+id/remember_last_node" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="记住上次连接的节点（勾选启用，取消勾选关闭）" android:textSize="13sp"/>
 </LinearLayout>
 </com.google.android.material.card.MaterialCardView>
-<com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" app:cardCornerRadius="18dp" app:cardElevation="0dp">
+<com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" app:cardCornerRadius="22dp" app:cardElevation="0dp" app:strokeColor="#E9ECF2" app:strokeWidth="1dp">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="18dp">
 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="每日节点监控" android:textSize="18sp" android:textStyle="bold"/>
 <TextView android:id="@+id/node_monitor_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="首次配对后自动查询每日采集结果"/>
@@ -44,7 +44,7 @@
 <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="首次配对后设备凭证会加密保存在本机。订阅地址保存在云端私有存储；只有你确认导入时才会发送给 App，不会自动覆盖当前配置。" android:textSize="11sp"/>
 </LinearLayout>
 </com.google.android.material.card.MaterialCardView>
-<com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" app:cardCornerRadius="18dp" app:cardElevation="0dp">
+<com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" app:cardCornerRadius="22dp" app:cardElevation="0dp" app:strokeColor="#E9ECF2" app:strokeWidth="1dp">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:padding="18dp">
 <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="应用分流" android:textSize="18sp" android:textStyle="bold"/>
