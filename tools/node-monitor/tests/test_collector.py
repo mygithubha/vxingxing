@@ -1,8 +1,9 @@
 import unittest
+import base64
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from collector import default_target_date, extract_public_subscriptions, find_exact_article
+from collector import default_target_date, extract_public_subscriptions, find_exact_article, probe_subscription
 
 
 class CollectorTests(unittest.TestCase):
@@ -31,6 +32,26 @@ class CollectorTests(unittest.TestCase):
         result = extract_public_subscriptions(html, date(2026, 11, 4))
         self.assertEqual([item.kind for item in result], ["txt", "yaml"])
         self.assertTrue(all("20261104" in item.url for item in result))
+
+    def test_txt_subscription_probe_decodes_base64_and_counts_nodes(self):
+        encoded = base64.b64encode(b"vless://one\\nvmess://two").decode("ascii")
+        item = extract_public_subscriptions(
+            f"https://www.yudou89.shop/202611/20261104abc.txt",
+            date(2026, 11, 4),
+        )[0]
+        checked = probe_subscription(item, fetcher=lambda _: encoded.encode("ascii"))
+        self.assertTrue(checked.valid)
+        self.assertEqual(checked.node_count, 2)
+
+    def test_yaml_subscription_probe_counts_proxy_entries(self):
+        item = extract_public_subscriptions(
+            "https://www.yudou89.shop/202611/20261104abc.yaml",
+            date(2026, 11, 4),
+        )[0]
+        payload = b"proxies:\\n  - name: node-one\\n  - name: node-two\\n"
+        checked = probe_subscription(item, fetcher=lambda _: payload)
+        self.assertTrue(checked.valid)
+        self.assertEqual(checked.node_count, 2)
 
     def test_default_target_is_china_date_minus_two_days(self):
         now = datetime(2026, 11, 6, 7, 30, tzinfo=ZoneInfo("Asia/Shanghai"))
