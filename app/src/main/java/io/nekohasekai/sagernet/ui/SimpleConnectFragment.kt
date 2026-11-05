@@ -21,6 +21,7 @@ import io.nekohasekai.sagernet.database.ProxyEntity
 import io.nekohasekai.sagernet.widget.ExitIp
 import io.nekohasekai.sagernet.bg.test.TestEngine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -29,6 +30,11 @@ import kotlinx.coroutines.withContext
  * Minimal entry point for manual subscription import, automatic selector start and per-app routing.
  */
 class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
+
+    companion object {
+        @Volatile
+        private var autoConnectAttemptedInProcess = false
+    }
 
     private val appPicker = registerForActivityResult(AppListActivity.Contract()) { packages ->
         if (packages != null) {
@@ -367,6 +373,36 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                     if (!DataStore.serviceState.connected) ExitIp.clear()
                 }
                 updateNodeMonitor(selectorStatus)
+            }
+        }
+
+        // On a fresh app process, wait for the first public subscription import before auto-connecting.
+        // The process-level guard prevents reconnecting just because the user returns to this screen.
+        if (!autoConnectAttemptedInProcess) {
+            autoConnectAttemptedInProcess = true
+            viewLifecycleOwner.lifecycleScope.launch {
+                repeat(30) {
+                    if (!isAdded || DataStore.serviceState.started) return@launch
+                    val selectorId = DataStore.selectedProxy
+                    val count = if (selectorId > 0L) withContext(Dispatchers.IO) {
+                        val selector = AutoSelectorProfiles.load(selectorId)
+                        selector?.gids?.distinct()
+                            ?.sumOf { gid -> ProfileManager.members(gid).count { it.type != "autoselector" } }
+                            ?: 0
+                    } else 0
+                    if (count > 0) {
+                        delay(1200)
+                        if (isAdded && !DataStore.serviceState.started) {
+                            status.text = "已获取节点，正在自动检测并连接…"
+                            connectButton.performClick()
+                        }
+                        return@launch
+                    }
+                    delay(2000)
+                }
+                if (isAdded && !DataStore.serviceState.started) {
+                    status.text = "暂未获取到节点；订阅将在后台继续更新，你也可以手动重试"
+                }
             }
         }
     }
