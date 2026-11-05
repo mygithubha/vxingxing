@@ -87,10 +87,13 @@ object AutoSelectorProfiles {
         val selector = load(id) ?: return false
         if (hasGeoExclusions(selector)) {
             val store = SettingsMapper.selectorStore()
-            val hasUnknownCountry = selector.gids.distinct()
-                .flatMap { store.group(it)?.members.orEmpty() }
-                .any { it.testCountry.isBlank() }
-            // An all-unknown pool is intentionally empty until its egress countries have been tested.
+            // A freshly checked pinned member is enough to start. Do not force an IP sweep of every
+            // subscription member just because unrelated nodes have no country metadata yet.
+            val candidates = if (selector.pinnedID > 0L) listOfNotNull(
+                selector.gids.distinct().asSequence().flatMap { store.group(it)?.members.orEmpty().asSequence() }
+                    .firstOrNull { it.id == selector.pinnedID }
+            ) else selector.gids.distinct().flatMap { store.group(it)?.members.orEmpty() }
+            val hasUnknownCountry = candidates.any { it.testCountry.isBlank() }
             if (hasUnknownCountry) return true
         }
         val plan = AutoSelectorPlanner(SettingsMapper.selectorStore()).plan(id, selector)
@@ -117,11 +120,10 @@ object AutoSelectorProfiles {
             val selector = load(id) ?: return@withContext null
             if (!hasGeoExclusions(selector)) return@withContext emptyList()
             val store = SettingsMapper.selectorStore()
-            selector.gids.distinct()
-                .flatMap { store.group(it)?.members.orEmpty() }
-                .filter { it.testCountry.isBlank() }
-                .map { it.id }
-                .distinct()
+            val members = selector.gids.distinct().flatMap { store.group(it)?.members.orEmpty() }
+            val candidates = if (selector.pinnedID > 0L) members.filter { it.id == selector.pinnedID }
+                else members.filter { it.testCountry.isBlank() }
+            candidates.filter { it.testCountry.isBlank() }.map { it.id }.distinct()
         } ?: return false
         if (unknownGeoIds.isNotEmpty()) {
             Logs.i("[Auto selector] Checking egress IP and country for " + unknownGeoIds.size + " unclassified profiles...")
