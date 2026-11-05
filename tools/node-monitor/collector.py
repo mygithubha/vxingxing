@@ -149,7 +149,7 @@ def probe_subscription(item: Subscription, fetcher=_fetch_bytes) -> Subscription
         raw = fetcher(item.url)
         text = raw.decode("utf-8-sig", errors="replace").strip()
         if item.kind == "txt":
-            compact = re.sub(r"\\s+", "", text)
+            compact = re.sub(r"\s+", "", text)
             try:
                 decoded = base64.b64decode(compact + "=" * (-len(compact) % 4), validate=False)
                 decoded_text = decoded.decode("utf-8", errors="replace")
@@ -161,9 +161,9 @@ def probe_subscription(item: Subscription, fetcher=_fetch_bytes) -> Subscription
                 r"(?i)(?:vmess|vless|ss|trojan|hysteria2?|tuic|socks5?)://", text
             ))
         else:
-            if not re.search(r"(?m)^\\s*proxies\\s*:", text):
+            if not re.search(r"(?m)^\s*proxies\s*:", text):
                 return Subscription(item.kind, item.url, False, 0)
-            count = len(re.findall(r"(?m)^\\s*-\\s*(?:name|server|type)\\s*:", text))
+            count = len(re.findall(r"(?m)^\s*-\s*(?:name|server|type)\s*:", text))
         return Subscription(item.kind, item.url, count > 0, count)
     except (HTTPError, URLError, TimeoutError, OSError, RuntimeError, ValueError):
         return Subscription(item.kind, item.url, False, 0)
