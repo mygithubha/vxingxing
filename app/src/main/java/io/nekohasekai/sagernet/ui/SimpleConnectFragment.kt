@@ -12,6 +12,7 @@ import com.google.android.material.textfield.TextInputEditText
 import androidx.lifecycle.lifecycleScope
 import io.nekohasekai.sagernet.R
 import io.nekohasekai.sagernet.bg.autoselector.AutoSelectorClient
+import io.nekohasekai.sagernet.bg.autoselector.AutoSelectorRuntime
 import io.nekohasekai.sagernet.bg.autoselector.AutoSelectorProfiles
 import io.nekohasekai.sagernet.bg.autoselector.AutoSelectorStatus
 import io.nekohasekai.sagernet.database.DataStore
@@ -80,24 +81,41 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         automaticModeButton.setOnClickListener {
             val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
             val selectorId = DataStore.selectedProxy
-            prefs.edit().putBoolean("manual_mode", false).putLong("manual_node_id", -1L).apply()
-            viewLifecycleOwner.lifecycleScope.launch {
-                withContext(Dispatchers.IO) {
-                    AutoSelectorProfiles.writes.withLock {
-                        val selector = AutoSelectorProfiles.load(selectorId) ?: return@withLock
-                        val buildKey = "auto_build_limit_$selectorId"
-                        val capKey = "auto_pool_cap_$selectorId"
-                        if (prefs.contains(buildKey)) {
-                            selector.buildLimit = prefs.getInt(buildKey, selector.buildLimit)
-                            selector.poolCap = prefs.getInt(capKey, selector.poolCap)
-                            prefs.edit().remove(buildKey).remove(capKey).apply()
+            val wasRunning = DataStore.serviceState.started
+            val switchToAutomatic = {
+                prefs.edit().putBoolean("manual_mode", false).putLong("manual_node_id", -1L).apply()
+                viewLifecycleOwner.lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        AutoSelectorProfiles.writes.withLock {
+                            val selector = AutoSelectorProfiles.load(selectorId) ?: return@withLock
+                            val buildKey = "auto_build_limit_$selectorId"
+                            val capKey = "auto_pool_cap_$selectorId"
+                            if (prefs.contains(buildKey)) {
+                                selector.buildLimit = prefs.getInt(buildKey, selector.buildLimit)
+                                selector.poolCap = prefs.getInt(capKey, selector.poolCap)
+                                prefs.edit().remove(buildKey).remove(capKey).apply()
+                            }
+                            selector.strictPinned = false
+                            AutoSelectorProfiles.save(selectorId, selector)
                         }
-                        selector.strictPinned = false
-                        AutoSelectorProfiles.save(selectorId, selector)
+                    }
+                    refreshNodeChoiceUi()
+                    if (wasRunning) {
+                        status.text = "正在恢复自动候选池，连接将短暂重建…"
+                        AutoSelectorRuntime.refreshRun(selectorId)
                     }
                 }
             }
-            refreshNodeChoiceUi()
+            if (wasRunning) {
+                AlertDialog.Builder(requireContext())
+                    .setTitle("切换到自动模式")
+                    .setMessage("将恢复完整自动候选池并重建当前 VPN 配置，连接可能短暂中断。是否继续？")
+                    .setPositiveButton("切换并重连") { _, _ -> switchToAutomatic() }
+                    .setNegativeButton("取消", null)
+                    .show()
+            } else {
+                switchToAutomatic()
+            }
         }
         selectNodeButton.setOnClickListener { showNodePicker() }
         val connectionPrefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
