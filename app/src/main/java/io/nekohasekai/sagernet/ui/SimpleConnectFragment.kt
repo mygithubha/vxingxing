@@ -172,8 +172,9 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                 else -> "首次连接或上次节点不可用，正在自动选优…"
             }
             viewLifecycleOwner.lifecycleScope.launch {
+                var manualRejected = false
+                var preferredHealthy = false
                 try {
-                    var preferredHealthy = false
                     if (preferredId > 0L) {
                         withContext(Dispatchers.IO) {
                             TestEngine.queueIpTests(listOf(preferredId))
@@ -189,7 +190,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                         }
                     }
                     if (manualMode && !preferredHealthy) {
-                        status.text = "你选择的节点不可用或地区不符合过滤规则，请重新选择"
+                        manualRejected = true
                         return@launch
                     }
                     withContext(Dispatchers.IO) {
@@ -218,6 +219,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                 } finally {
                     connectButton.isEnabled = true
                     refreshConnectionState()
+                    if (manualRejected) status.text = "你选择的节点不可用或地区不符合过滤规则，请重新选择"
                 }
             }
         }
