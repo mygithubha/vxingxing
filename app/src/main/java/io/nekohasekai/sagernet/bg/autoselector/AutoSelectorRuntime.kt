@@ -277,6 +277,11 @@ object AutoSelectorRuntime {
         }
     }
 
+    fun refreshRun(selectorId: Long) {
+        val run = current() ?: return
+        if (run.build.selectorId == selectorId) rebuild(run, null)
+    }
+
     // ------------------------------------------------------------------------------------------------ rebuilds
 
     /**
