@@ -532,7 +532,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                         profile.latency == ProxyEntity.LATENCY_CONNECT_ONLY -> "已连通"
                         else -> "延迟待检测"
                     }
-                    return "${profile.displayName()}\n$ip · $region · $latency"
+                    return "${profile.displayName()} · $ip · $region · $latency"
                 }
 
                 val adapter = ArrayAdapter(
@@ -540,7 +540,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                     android.R.layout.simple_list_item_1,
                     displayedProfiles.map(::label).toMutableList()
                 )
-                val dialog = AlertDialog.Builder(requireContext())
+                AlertDialog.Builder(requireContext())
                     .setTitle("选择节点（本地缓存）")
                     .setMessage("列表立即显示缓存。未知地区的节点核验完成前不可选择；打开列表不会执行全量连通性测速。")
                     .setAdapter(adapter) { _, which ->
@@ -605,8 +605,6 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                 } else {
                     status.text = "已显示本地缓存；连通性将在连接时检查"
                 }
-                // Keep a reference to avoid a lint warning and make the intended lifecycle explicit.
-                dialog.setOnDismissListener { }
             } catch (e: Exception) {
                 status.text = "节点列表加载失败：${e.message ?: "请重试"}"
             } finally {
