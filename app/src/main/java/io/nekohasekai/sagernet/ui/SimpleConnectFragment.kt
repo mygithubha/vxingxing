@@ -569,7 +569,8 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
 
                 fun label(profile: ProxyEntity): String {
                     val country = profile.testCountry?.trim()?.uppercase().orEmpty()
-                    val ip = profile.ipOut?.takeIf { it.isNotBlank() } ?: "IP 待核验"
+                    val server = profile.displayAddress().ifBlank { "服务器地址未知" }
+                    val egress = profile.ipOut?.takeIf { it.isNotBlank() } ?: "节点出口 IP 待核验"
                     val region = when {
                         country.isBlank() -> "地区待核验"
                         country in setOf("CN", "HK", "MO", "TW") -> "已过滤：$country"
@@ -580,7 +581,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                         profile.latency == ProxyEntity.LATENCY_CONNECT_ONLY -> "已连通"
                         else -> "延迟待检测"
                     }
-                    return "${profile.displayName()} · $ip · $region · $latency"
+                    return "${profile.displayName()} · 服务器 $server · $egress · $region · $latency"
                 }
 
                 val adapter = ArrayAdapter(
@@ -604,7 +605,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                             else -> {
                                 AlertDialog.Builder(requireContext())
                                     .setTitle("确认选择节点")
-                                    .setMessage("${selected.displayName()}\n${selected.ipOut} · $country")
+                                    .setMessage("${selected.displayName()}\n服务器：${selected.displayAddress()}\n节点出口 IP：${selected.ipOut} · $country")
                                     .setPositiveButton("确认选择") { _, _ ->
                                         requireContext().getSharedPreferences("simple_auto_connect", 0).edit()
                                             .putBoolean("manual_mode", true)
