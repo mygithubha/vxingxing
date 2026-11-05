@@ -693,5 +693,6 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                 connectButton.text = "测速并连接最佳节点"
             }
         }
+        if (DataStore.serviceState.connected && exitIpCheckKey != null) updateExitIpStatus()
     }
 }
