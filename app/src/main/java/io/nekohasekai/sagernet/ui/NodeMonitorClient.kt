@@ -4,6 +4,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MediaType.Companion.toMediaType
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -29,6 +31,27 @@ object NodeMonitorClient {
         .callTimeout(25, TimeUnit.SECONDS)
         .connectTimeout(10, TimeUnit.SECONDS)
         .build()
+
+
+    suspend fun pairDevice(pairingCode: String): String = withContext(Dispatchers.IO) {
+        val payload = JSONObject().put("pairing_code", pairingCode.trim())
+            .toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val request = Request.Builder()
+            .url("$BASE_URL/api/pair")
+            .header("Accept", "application/json")
+            .post(payload)
+            .build()
+        http.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw IOException("配对失败：请检查配对码（HTTP ${response.code}）")
+            }
+            val token = try { JSONObject(body).optString("access_token") }
+            catch (_: Exception) { "" }
+            token.takeIf { it.length >= 32 }
+                ?: throw IOException("服务器未返回有效设备凭证")
+        }
+    }
 
     suspend fun fetchPending(token: String): NodeMonitorPending = withContext(Dispatchers.IO) {
         val json = getJson("$BASE_URL/api/pending", token)
