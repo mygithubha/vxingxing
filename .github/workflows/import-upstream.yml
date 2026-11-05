@@ -26,7 +26,9 @@ jobs:
       - name: Preserve product documentation and workflows
         run: |
           mkdir -p /tmp/product-meta
-          cp -a README.md docs .github/workflows /tmp/product-meta/
+          cp -a README.md docs /tmp/product-meta/
+          mkdir -p /tmp/product-meta/.github/workflows
+          cp -a .github/workflows/. /tmp/product-meta/.github/workflows/
 
       - name: Clone upstream source
         run: |
