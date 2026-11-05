@@ -44,7 +44,7 @@ def _record(result) -> dict:
 
 
 @app.post("/api/pair")
-def pair_device(payload: dict = Body(...), response: Response = None):
+def pair_device(response: Response, payload: dict = Body(...)):
     # Exchange a high-entropy setup code for the long-lived API credential.
     expected = os.environ.get("PAIRING_CODE", "")
     api_token = os.environ.get("NODE_MONITOR_API_TOKEN", "")
