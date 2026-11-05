@@ -769,15 +769,11 @@ class ConfigGenerator @JvmOverloads constructor(
         )
         if (warm.isNotEmpty()) group["warm"] = warm
         if (pinnedTag.isNotEmpty()) group["pinned"] = pinnedTag
-        if (selector.maxRTTms > 0) group["max_rtt"] = "${selector.maxRTTms}ms"
+        // Do not emit max_rtt: a healthy but slower incumbent must remain eligible under policy A.
         // Never the latency test URL: that one is fetched through the proxy and is routinely blocked directly.
         val connectivityUrl = selector.connectivityURL.ifEmpty { settings.directTestUrl }
         if (connectivityUrl.isNotEmpty()) group["connectivity_url"] = connectivityUrl
-        if (selector.balance) {
-            group["balance"] = true
-            group["balance_mode"] = selector.balanceMode
-            group["balance_interval"] = "${selector.balanceIntervalSec}s"
-        }
+        // Policy A never rotates healthy members; omit balancing even if an imported profile had it enabled.
         state.outbounds.add(group)
         state.autoSelector = AutoSelectorBuild(
             groupTag = groupTag,
