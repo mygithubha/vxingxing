@@ -79,7 +79,24 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         refreshNodeChoiceUi()
         automaticModeButton.setOnClickListener {
             val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
+            val selectorId = DataStore.selectedProxy
             prefs.edit().putBoolean("manual_mode", false).putLong("manual_node_id", -1L).apply()
+            viewLifecycleOwner.lifecycleScope.launch {
+                withContext(Dispatchers.IO) {
+                    AutoSelectorProfiles.writes.withLock {
+                        val selector = AutoSelectorProfiles.load(selectorId) ?: return@withLock
+                        val buildKey = "auto_build_limit_$selectorId"
+                        val capKey = "auto_pool_cap_$selectorId"
+                        if (prefs.contains(buildKey)) {
+                            selector.buildLimit = prefs.getInt(buildKey, selector.buildLimit)
+                            selector.poolCap = prefs.getInt(capKey, selector.poolCap)
+                            prefs.edit().remove(buildKey).remove(capKey).apply()
+                        }
+                        selector.strictPinned = false
+                        AutoSelectorProfiles.save(selectorId, selector)
+                    }
+                }
+            }
             refreshNodeChoiceUi()
         }
         selectNodeButton.setOnClickListener { showNodePicker() }
