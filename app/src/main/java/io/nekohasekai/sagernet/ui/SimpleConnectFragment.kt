@@ -52,7 +52,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
             view.findViewById<com.google.android.material.textfield.TextInputLayout>(
                 R.id.subscription_input_layout
             ).error = null
-            SubscribeFlows.addSubscription(requireActivity(), url, "")
+            SubscribeFlows.addSubscriptionQuick(requireActivity(), url)
         }
 
         view.findViewById<MaterialButton>(R.id.select_apps).setOnClickListener {
