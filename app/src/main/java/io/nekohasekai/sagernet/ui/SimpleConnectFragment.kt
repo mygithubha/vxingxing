@@ -387,7 +387,9 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                     val count = if (selectorId > 0L) withContext(Dispatchers.IO) {
                         val selector = AutoSelectorProfiles.load(selectorId)
                         selector?.gids?.distinct()
-                            ?.sumOf { gid -> ProfileManager.members(gid).count { it.type != "autoselector" } }
+                            ?.sumOf { gid -> ProfileManager.members(gid).count { profile ->
+                                profile.type != "autoselector" && profile.testCountry?.uppercase() !in setOf("CN", "HK", "MO", "TW")
+                            } }
                             ?: 0
                     } else 0
                     if (count > 0) {
