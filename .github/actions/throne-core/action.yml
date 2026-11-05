@@ -82,7 +82,7 @@ runs:
         chmod -R u+w "$PATCH_DIR"
         python3 "$GITHUB_WORKSPACE/scripts/patch_autoselector_failure_only.py" "$PATCH_DIR"
         go mod edit -replace="github.com/sagernet/sing-box=$PATCH_DIR"
-        (cd "$PATCH_DIR" && go test -count=1 ./protocol/group -run "^(TestCooldownBackoffAndRollback|TestDialFailureOnlyAppliesCooldownAfterThreeConsecutiveFailures|TestRoutedDialFailureMovesSelectionOffAfterThreeFailures)$")
+        (cd "$PATCH_DIR" && go test -timeout=60s -count=1 ./protocol/group -run "^(TestCooldownBackoffAndRollback|TestDialFailureOnlyAppliesCooldownAfterThreeConsecutiveFailures|TestRoutedDialFailureMovesSelectionOffAfterThreeFailures)$")
     - name: Build ThroneCore AAR
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
