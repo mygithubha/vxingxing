@@ -23,7 +23,7 @@ python -m unittest discover -s tests -v
 python collector.py --date 2026-11-04
 ```
 
-The CLI prints a redacted summary. The current prototype does not persist results, expose an API, or import anything into the Android client. Those require the private storage/authenticated API stage and explicit user confirmation in the app.
+The CLI prints a redacted summary. The collector probes each extracted subscription response and records a conservative node count. The API stores records in private Blob storage and exposes only metadata until an authenticated, type-specific import request. It does not import anything into the Android client yet. Those require the private storage/authenticated API stage and explicit user confirmation in the app.
 
 ## Security boundary for the next stage
 
