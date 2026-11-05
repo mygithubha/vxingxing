@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.View
 import android.widget.TextView
 import android.widget.CheckBox
+import android.widget.ArrayAdapter
 import androidx.appcompat.app.AlertDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
@@ -14,6 +15,9 @@ import io.nekohasekai.sagernet.bg.autoselector.AutoSelectorClient
 import io.nekohasekai.sagernet.bg.autoselector.AutoSelectorProfiles
 import io.nekohasekai.sagernet.bg.autoselector.AutoSelectorStatus
 import io.nekohasekai.sagernet.database.DataStore
+import io.nekohasekai.sagernet.database.ProfileManager
+import io.nekohasekai.sagernet.database.ProxyEntity
+import io.nekohasekai.sagernet.bg.test.TestEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
@@ -38,6 +42,9 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
     private lateinit var status: TextView
     private lateinit var connectButton: MaterialButton
     private lateinit var rememberLastNode: CheckBox
+    private lateinit var selectedNodeSummary: TextView
+    private lateinit var selectNodeButton: MaterialButton
+    private lateinit var automaticModeButton: MaterialButton
     private lateinit var appsSummary: TextView
     private lateinit var currentNode: TextView
     private lateinit var nodeHealth: TextView
@@ -59,6 +66,16 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         status = view.findViewById(R.id.connection_status)
         connectButton = view.findViewById(R.id.connect_best_node)
         rememberLastNode = view.findViewById(R.id.remember_last_node)
+        selectedNodeSummary = view.findViewById(R.id.selected_node_summary)
+        selectNodeButton = view.findViewById(R.id.select_node)
+        automaticModeButton = view.findViewById(R.id.automatic_mode)
+        refreshNodeChoiceUi()
+        automaticModeButton.setOnClickListener {
+            val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
+            prefs.edit().putBoolean("manual_mode", false).putLong("manual_node_id", -1L).apply()
+            refreshNodeChoiceUi()
+        }
+        selectNodeButton.setOnClickListener { showNodePicker() }
         val connectionPrefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
         rememberLastNode.isChecked = connectionPrefs.getBoolean("remember_last_node_enabled", false)
         rememberLastNode.setOnCheckedChangeListener { _, checked ->
@@ -143,31 +160,55 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
             }
             val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
             connectButton.isEnabled = false
+            val manualMode = prefs.getBoolean("manual_mode", false)
             val rememberEnabled = prefs.getBoolean("remember_last_node_enabled", false)
-            status.text = if (rememberEnabled) "正在检查上次连接的节点…" else "正在测速并选择可用节点…"
+            val selectorId = DataStore.selectedProxy
+            val preferredId = if (manualMode) prefs.getLong("manual_node_id", -1L)
+                else if (rememberEnabled && prefs.getLong("last_selector_id", -1L) == selectorId)
+                    prefs.getLong("last_node_id", -1L) else -1L
+            status.text = when {
+                manualMode -> "正在检查你选定的节点…"
+                preferredId > 0L -> "只检查上次节点，正常则直接复用…"
+                else -> "首次连接或上次节点不可用，正在自动选优…"
+            }
             viewLifecycleOwner.lifecycleScope.launch {
                 try {
+                    var preferredHealthy = false
+                    if (preferredId > 0L) {
+                        withContext(Dispatchers.IO) {
+                            TestEngine.queueIpTests(listOf(preferredId))
+                            val afterIp = ProfileManager.getProfile(preferredId)
+                            if (!afterIp?.ipOut.isNullOrBlank() && !afterIp?.testCountry.isNullOrBlank()) {
+                                TestEngine.queueUrlTests(listOf(preferredId))
+                            }
+                            val checked = ProfileManager.getProfile(preferredId)
+                            preferredHealthy = !checked?.ipOut.isNullOrBlank() &&
+                                !checked?.testCountry.isNullOrBlank() &&
+                                checked?.latency?.let { it > 0 || it == ProxyEntity.LATENCY_CONNECT_ONLY } == true &&
+                                checked?.testCountry?.uppercase() !in setOf("CN", "HK", "MO", "TW")
+                        }
+                    }
+                    if (manualMode && !preferredHealthy) {
+                        status.text = "你选择的节点不可用或地区不符合过滤规则，请重新选择"
+                        return@launch
+                    }
                     withContext(Dispatchers.IO) {
-                        val selectorId = DataStore.selectedProxy
                         AutoSelectorProfiles.writes.withLock {
                             val selector = AutoSelectorProfiles.load(selectorId) ?: return@withLock
-                            val rememberedId = if (rememberEnabled && prefs.getLong("last_selector_id", -1L) == selectorId) {
-                                prefs.getLong("last_node_id", -1L)
-                            } else {
-                                -1L
-                            }
-                            // Keep these regions out of the Auto Connect pool. The subscription rows remain stored.
                             val excludedCountries = setOf("CN", "HK", "MO", "TW")
                             val countryFilters = selector.countryFilter.split(',')
-                                .map { it.trim() }
-                                .filter { it.isNotEmpty() }
-                                .toMutableSet()
+                                .map { it.trim() }.filter { it.isNotEmpty() }.toMutableSet()
                             excludedCountries.forEach { countryFilters.add("!$it") }
                             selector.countryFilter = countryFilters.joinToString(",")
-
-                            // A pin is a preference, not a hard lock: the core uses another healthy member
-                            // while this remembered member is dead, then can return to it after recovery.
-                            selector.pinnedID = rememberedId.takeIf { it > 0L } ?: -1L
+                            if (preferredHealthy) {
+                                // The core gets a fresh result for this one preferred member. Keep it first in the
+                                // persisted pool; the normal failover members remain available behind it.
+                                selector.pinnedID = preferredId
+                                selector.pool = (listOf(preferredId) + selector.pool.filterNot { it == preferredId }).toMutableList()
+                            } else {
+                                // The previous member failed: return to the complete automatic candidate pool.
+                                selector.pinnedID = -1L
+                            }
                             AutoSelectorProfiles.save(selectorId, selector)
                         }
                     }
@@ -181,6 +222,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
             }
         }
         updateAppsSummary()
+        refreshNodeChoiceUi()
         refreshConnectionState()
         updateNodeMonitor(AutoSelectorClient.status.value)
         viewLifecycleOwner.lifecycleScope.launch {
@@ -304,6 +346,58 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         DataStore.bypass = false
         DataStore.individual = ""
         prefs.edit().putBoolean("safe_routing_initialized", true).apply()
+    }
+
+    private fun refreshNodeChoiceUi() {
+        if (!::selectedNodeSummary.isInitialized) return
+        val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
+        val manual = prefs.getBoolean("manual_mode", false)
+        val id = prefs.getLong("manual_node_id", -1L)
+        val profile = if (id > 0L) ProfileManager.getProfile(id) else null
+        selectedNodeSummary.text = if (manual && profile != null) {
+            "手动节点：${profile.displayName()}\nIP：${profile.ipOut ?: "待检测"} · 地区：${profile.testCountry ?: "待检测"}"
+        } else if (manual) {
+            "尚未选择节点，请从列表中选择"
+        } else {
+            "自动模式：优先复用上次成功节点，失效后才重新选优"
+        }
+        automaticModeButton.isEnabled = manual
+        selectNodeButton.text = if (manual) "更换节点" else "手动选择节点"
+    }
+
+    private fun showNodePicker() {
+        val selector = AutoSelectorProfiles.load(DataStore.selectedProxy) ?: return
+        val members = selector.gids.distinct().flatMap { ProfileManager.members(it) }
+            .distinctBy { it.id }
+            .filter { it.type != "autoselector" && it.testCountry?.uppercase() !in setOf("CN", "HK", "MO", "TW") }
+        if (members.isEmpty()) {
+            status.text = "当前订阅组没有可供选择的节点"
+            return
+        }
+        val labels = members.map { profile ->
+            val ip = profile.ipOut?.takeIf { it.isNotBlank() } ?: "IP待检测"
+            val country = profile.testCountry?.takeIf { it.isNotBlank() } ?: "地区待检测"
+            val latency = when {
+                profile.latency > 0 -> "${profile.latency} ms"
+                profile.latency == ProxyEntity.LATENCY_CONNECT_ONLY -> "已连通"
+                profile.latency < 0 -> "不可用"
+                else -> "未测速"
+            }
+            "${profile.displayName()}\n$ip · $country · $latency"
+        }.toTypedArray()
+        AlertDialog.Builder(requireContext())
+            .setTitle("选择连接节点")
+            .setAdapter(ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, labels)) { dialog, which ->
+                val selected = members[which]
+                requireContext().getSharedPreferences("simple_auto_connect", 0).edit()
+                    .putBoolean("manual_mode", true)
+                    .putLong("manual_node_id", selected.id)
+                    .apply()
+                refreshNodeChoiceUi()
+                dialog.dismiss()
+            }
+            .setNegativeButton("取消", null)
+            .show()
     }
 
     private fun updateAppsSummary() {
