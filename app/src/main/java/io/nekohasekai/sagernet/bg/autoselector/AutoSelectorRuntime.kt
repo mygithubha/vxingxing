@@ -589,6 +589,7 @@ object AutoSelectorRuntime {
                 corePhase = sample?.phase ?: "starting",
                 selectedId = selectedId,
                 selectedName = run.names[selectedId].orEmpty().ifEmpty { sample?.selectedTag.orEmpty() },
+                selectedState = sample?.members?.firstOrNull { it.tag == sample.selectedTag }?.state.orEmpty(),
                 pinnedId = sample?.pinnedTag?.let(ids::get) ?: -1L,
                 lastSwitchMs = sample?.lastSwitchMs ?: 0,
                 lastSwitchReason = sample?.lastSwitchReason.orEmpty(),
