@@ -338,6 +338,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                             AutoSelectorProfiles.save(selectorId, selector)
                         }
                     }
+                    AutoSelectorRuntime.resetFailoverBudget()
                     host.toggleService()
                 } catch (e: Exception) {
                     status.text = "连接准备失败：${e.message ?: "请重试"}"
