@@ -1,0 +1,46 @@
+name: Android CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "**.gradle"
+      - "**.gradle.kts"
+      - "**.kt"
+      - "**.java"
+      - "gradle/**"
+      - "app/**"
+      - ".github/workflows/android-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build debug APK
+        run: |
+          if [ -f ./gradlew ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleDebug
+          else
+            echo "Android source has not been imported yet."
+            exit 1
+          fi
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-connect-debug-apk
+          path: "**/build/outputs/apk/debug/*.apk"
+          if-no-files-found: error
