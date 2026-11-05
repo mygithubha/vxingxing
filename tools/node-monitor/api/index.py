@@ -42,6 +42,16 @@ def _record(result) -> dict:
     }
 
 
+def _store_record(target: str, record: dict) -> None:
+    payload = json.dumps(record, ensure_ascii=False).encode("utf-8")
+    blob.put_blob(
+        f"pending/{target}.json",
+        payload,
+        access="private",
+        content_type="application/json",
+        allow_overwrite=True,
+    )
+
 
 @app.post("/api/pair")
 def pair_device(response: Response, payload: dict = Body(...)):
@@ -55,6 +65,7 @@ def pair_device(response: Response, payload: dict = Body(...)):
     response.headers["Pragma"] = "no-cache"
     return {"access_token": api_token}
 
+
 @app.get("/api/cron")
 def run_daily_collection(
     response: Response,
@@ -65,17 +76,8 @@ def run_daily_collection(
     try:
         target = default_target_date()
         result = collect(target)
-        payload = json.dumps(_record(result), ensure_ascii=False).encode("utf-8")
-        # Private Blob only. Never log payload, subscription URLs, or Blob URLs.
-        blob.put_blob(
-            f"pending/{target.isoformat()}.json",
-            payload,
-            access="private",
-            content_type="application/json",
-            allow_overwrite=True,
-        )
-        if response is not None:
-            response.headers["Cache-Control"] = "no-store"
+        _store_record(target.isoformat(), _record(result))
+        response.headers["Cache-Control"] = "no-store"
         return {
             "target_date": target.isoformat(),
             "status": result.status,
@@ -111,7 +113,14 @@ def get_pending_record(
         stored = blob.get_blob(f"pending/{target}.json", access="private")
         record = json.loads(stored.body.decode("utf-8"))
     except BlobNotFoundError:
-        raise HTTPException(status_code=404, detail="No pending record") from None
+        # First app visit must not depend on waiting for the next 08:00 cron.
+        # Collection is date-scoped, public-page-only, and never bypasses passwords.
+        try:
+            result = collect(date.fromisoformat(target))
+            record = _record(result)
+            _store_record(target, record)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="Collection temporarily unavailable") from None
     except Exception:
         raise HTTPException(status_code=503, detail="Pending record unavailable") from None
 
