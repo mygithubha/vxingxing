@@ -174,8 +174,24 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                 when {
                     selectorStatus.pinnedId > 0L && selectorStatus.selectedId > 0L &&
                         selectorStatus.pinnedId != selectorStatus.selectedId -> {
-                        nodeHealth.text = "上次节点不可用 · 已自动切换"
-                        nodeHealth.setTextColor(Color.rgb(190, 120, 0))
+                        when (selectorStatus.selectedState) {
+                            AutoSelectorStatus.STATE_OK -> {
+                                nodeHealth.text = "上次节点不可用 · 当前节点可用"
+                                nodeHealth.setTextColor(Color.rgb(30, 145, 70))
+                            }
+                            AutoSelectorStatus.STATE_DEGRADED -> {
+                                nodeHealth.text = "上次节点不可用 · 当前节点可用但较慢"
+                                nodeHealth.setTextColor(Color.rgb(190, 120, 0))
+                            }
+                            AutoSelectorStatus.STATE_DEAD, AutoSelectorStatus.STATE_COOLDOWN -> {
+                                nodeHealth.text = "当前节点不可用 · 正在寻找新节点"
+                                nodeHealth.setTextColor(Color.rgb(190, 45, 45))
+                            }
+                            else -> {
+                                nodeHealth.text = "上次节点不可用 · 新节点检测中"
+                                nodeHealth.setTextColor(Color.rgb(190, 120, 0))
+                            }
+                        }
                     }
                     selectorStatus.selectedState == AutoSelectorStatus.STATE_OK -> {
                         nodeHealth.text = "● 可用"
