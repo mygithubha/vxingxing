@@ -33,8 +33,13 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
             // Allow-list mode: only explicitly selected apps enter the VPN. Everything else stays direct.
             DataStore.proxyApps = true
             DataStore.bypass = false
-            DataStore.individual = packages.distinct().joinToString("\n")
+            val (safePackages, blockedPackages) = filterSensitiveProxyApps(packages)
+            DataStore.individual = safePackages.joinToString("\n")
             updateAppsSummary()
+            if (blockedPackages.isNotEmpty()) {
+                status.text = "已阻止将疑似金融、支付、身份或密码类应用加入代理白名单，已保持直连：\n" +
+                    blockedPackages.joinToString("\n")
+            }
         }
     }
 
@@ -156,6 +161,16 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                 host.toggleService()
                 refreshConnectionState()
                 return@setOnClickListener
+            }
+            // The proxy app list is an allow-list. Re-check it at connection time so a stale selection
+            // from an older build cannot accidentally route a recognisably sensitive app through a node.
+            val (safePackages, blockedPackages) = filterSensitiveProxyApps(
+                DataStore.individual.lines().map { it.trim() }.filter { it.isNotEmpty() }
+            )
+            if (blockedPackages.isNotEmpty()) {
+                DataStore.individual = safePackages.joinToString("\n")
+                updateAppsSummary()
+                status.text = "已自动移除疑似敏感应用，保持直连：\n" + blockedPackages.joinToString("\n")
             }
             val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
             connectButton.isEnabled = false
@@ -520,6 +535,32 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                 selectNodeButton.isEnabled = true
             }
         }
+    }
+
+    /**
+     * Conservative guard for the proxy allow-list. Apps whose package id or visible label clearly identifies
+     * banking, payments, finance, identity or password/authentication functions are kept outside the VPN.
+     * Unknown apps are not guessed; the default allow-list still leaves every unselected app direct.
+     */
+    private fun filterSensitiveProxyApps(packages: Collection<String>): Pair<List<String>, List<String>> {
+        val sensitiveTerms = listOf(
+            "bank", "banking", "银行", "金融", "证券", "券商",
+            "wallet", "alipay", "unionpay", "payment", "pay", "支付", "钱包",
+            "password", "authenticator", "2fa", "otp", "密码", "身份", "证件",
+            "crypto-wallet", "cryptowallet"
+        )
+        val blocked = ArrayList<String>()
+        val allowed = ArrayList<String>()
+        val pm = requireContext().packageManager
+        for (packageName in packages.distinct()) {
+            val label = runCatching {
+                pm.getApplicationInfo(packageName, 0).loadLabel(pm).toString()
+            }.getOrDefault("")
+            val identity = "$packageName $label".lowercase()
+            if (sensitiveTerms.any { identity.contains(it) }) blocked.add(packageName)
+            else allowed.add(packageName)
+        }
+        return allowed to blocked
     }
 
     private fun updateAppsSummary() {
