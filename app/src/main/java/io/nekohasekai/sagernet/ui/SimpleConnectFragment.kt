@@ -100,6 +100,8 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         }
     }
 
+    fun refreshUiState() = refreshConnectionState()
+
     private fun refreshConnectionState() {
         if (!::status.isInitialized) return
         when {
