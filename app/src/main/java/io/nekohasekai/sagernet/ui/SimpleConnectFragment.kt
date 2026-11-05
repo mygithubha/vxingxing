@@ -66,18 +66,26 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         importNodeMonitorYaml = view.findViewById(R.id.import_node_monitor_yaml)
 
         view.findViewById<MaterialButton>(R.id.save_node_monitor_token).setOnClickListener {
-            val token = nodeMonitorTokenInput.text?.toString()?.trim().orEmpty()
-            if (token.length < 32) {
-                nodeMonitorStatus.text = "访问令牌格式不正确，请重新粘贴"
+            val pairingCode = nodeMonitorTokenInput.text?.toString()?.trim().orEmpty()
+            if (pairingCode.length < 20) {
+                nodeMonitorStatus.text = "请输入首次配对码"
                 return@setOnClickListener
             }
-            try {
-                NodeMonitorTokenStore.save(requireContext(), token)
-                nodeMonitorTokenInput.text?.clear()
-                nodeMonitorStatus.text = "访问令牌已使用 Android Keystore 加密保存"
-                refreshNodeMonitorPending()
-            } catch (e: Exception) {
-                nodeMonitorStatus.text = "安全保存失败：${e.message ?: "请重试"}"
+            val pairButton = view.findViewById<MaterialButton>(R.id.save_node_monitor_token)
+            pairButton.isEnabled = false
+            nodeMonitorStatus.text = "正在安全配对设备…"
+            viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    val deviceToken = NodeMonitorClient.pairDevice(pairingCode)
+                    NodeMonitorTokenStore.save(requireContext(), deviceToken)
+                    nodeMonitorTokenInput.text?.clear()
+                    nodeMonitorStatus.text = "设备配对成功，访问凭证已加密保存在本机"
+                    refreshNodeMonitorPending()
+                } catch (e: Exception) {
+                    nodeMonitorStatus.text = e.message ?: "配对失败，请检查网络后重试"
+                } finally {
+                    pairButton.isEnabled = true
+                }
             }
         }
         view.findViewById<MaterialButton>(R.id.refresh_node_monitor).setOnClickListener {
@@ -86,7 +94,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         importNodeMonitorTxt.setOnClickListener { confirmNodeMonitorImport("txt") }
         importNodeMonitorYaml.setOnClickListener { confirmNodeMonitorImport("yaml") }
         if (NodeMonitorTokenStore.load(requireContext()) != null) {
-            nodeMonitorStatus.text = "访问令牌已安全保存，正在检查前天节点…"
+            nodeMonitorStatus.text = "设备已配对，正在检查前天节点…"
             refreshNodeMonitorPending()
         }
 
