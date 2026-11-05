@@ -3,8 +3,6 @@ package io.nekohasekai.sagernet.ui
 import android.os.Bundle
 import android.view.View
 import android.widget.TextView
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.view.isVisible
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import io.nekohasekai.sagernet.R
@@ -36,6 +34,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         toolbar?.navigationIcon = null
         toolbar?.setNavigationOnClickListener(null)
 
+        ensureSafeRoutingDefaults()
         urlInput = view.findViewById(R.id.subscription_url)
         status = view.findViewById(R.id.connection_status)
         connectButton = view.findViewById(R.id.connect_best_node)
@@ -80,6 +79,16 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
             updateAppsSummary()
             refreshConnectionState()
         }
+    }
+
+    private fun ensureSafeRoutingDefaults() {
+        val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
+        if (prefs.getBoolean("safe_routing_initialized", false)) return
+        // Migrate old global/bypass configurations to a fail-closed allow-list before enabling this UI.
+        DataStore.proxyApps = true
+        DataStore.bypass = false
+        DataStore.individual = ""
+        prefs.edit().putBoolean("safe_routing_initialized", true).apply()
     }
 
     private fun updateAppsSummary() {
