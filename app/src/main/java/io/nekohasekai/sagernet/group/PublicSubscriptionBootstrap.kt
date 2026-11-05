@@ -56,6 +56,7 @@ internal object PublicSubscriptionBootstrap {
                         skipAutoUpdate = false,
                         subOptions = SubscriptionOptions(
                             updateInterval = DEFAULT_UPDATE_MINUTES,
+                            respectServerInterval = false,
                             urlTest = true,
                             sortByLatency = true,
                             removeDuplicates = true,
