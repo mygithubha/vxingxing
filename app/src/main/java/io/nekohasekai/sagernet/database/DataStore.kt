@@ -94,8 +94,8 @@ object DataStore : OnPreferenceDataStoreChangeListener {
 
     var meteredNetwork by configurationStore.boolean(Key.METERED_NETWORK)
     var allowBypass by configurationStore.boolean(Key.ALLOW_BYPASS)
-    var proxyApps by configurationStore.boolean(Key.PROXY_APPS)
-    var bypass by configurationStore.boolean(Key.BYPASS_MODE) { true }
+    var proxyApps by configurationStore.boolean(Key.PROXY_APPS) { true }
+    var bypass by configurationStore.boolean(Key.BYPASS_MODE) { false }
     var individual by configurationStore.string(Key.INDIVIDUAL)
     /** The VPN hands the mixed inbound to apps as the system HTTP proxy (only without inbound_auth). */
     var appendHttpProxy by configurationStore.boolean(Key.APPEND_HTTP_PROXY)
