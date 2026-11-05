@@ -32,6 +32,8 @@ import kotlinx.coroutines.withContext
 class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
 
     companion object {
+        private const val STARTUP_NODE_WAIT_ATTEMPTS = 90
+
         @Volatile
         private var autoConnectAttemptedInProcess = false
     }
@@ -381,7 +383,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         if (!autoConnectAttemptedInProcess) {
             autoConnectAttemptedInProcess = true
             viewLifecycleOwner.lifecycleScope.launch {
-                repeat(90) {
+                repeat(STARTUP_NODE_WAIT_ATTEMPTS) {
                     if (!isAdded || DataStore.serviceState.started) return@launch
                     val selectorId = DataStore.selectedProxy
                     val count = if (selectorId > 0L) withContext(Dispatchers.IO) {
