@@ -190,6 +190,9 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                     append("目标日期：").append(pending.targetDate.ifBlank { "未知" }).append("\n")
                     append("TXT：").append(if (txt?.valid == true) "可用 · ${txt.nodeCount} 个节点" else "不可用或未提取").append("\n")
                     append("YAML：").append(if (yaml?.valid == true) "可用 · ${yaml.nodeCount} 个节点" else "不可用或未提取")
+                    if (pending.collectedAt.isNotBlank()) {
+                        append("\n采集时间：").append(pending.collectedAt)
+                    }
                     if (pending.articleTitle.isNotBlank()) {
                         append("\n文章：").append(pending.articleTitle)
                     }
