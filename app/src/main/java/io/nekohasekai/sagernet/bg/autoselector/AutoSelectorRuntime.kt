@@ -300,27 +300,20 @@ object AutoSelectorRuntime {
     /** on_subscription_group_changed (mainwindow_autoselector.cpp:33-65). */
     private fun onGroupChanged(gid: Long, disturbed: List<Long>) {
         if (gid < 0) return
+        // P0: a subscription refresh is a data-plane-independent operation. The running ProxyInstance
+        // owns the already-generated core configuration; never rebuild or stop it because profile rows
+        // were replaced/deleted. The refreshed database is used by the next explicit connection or by
+        // failure-only recovery after the running core has actually exhausted its active members.
         scope.launch(Dispatchers.IO) {
-            val disturbedSet = disturbed.toHashSet()
             val running = current()
-            var restart = false
-            for (id in AutoSelectorProfiles.ids()) {
-                val (selector, prunedBuilt) = AutoSelectorProfiles.writes.withLock {
-                    val selector = AutoSelectorProfiles.load(id)?.takeIf { gid in it.gids } ?: return@withLock null
-                    val alive = AutoSelectorProfiles.existing(selector.pool + selector.lastBuilt)
-                    val prunedPool = selector.pool.removeAll { it !in alive }
-                    val prunedBuilt = selector.lastBuilt.removeAll { it !in alive }
-                    if (prunedPool || prunedBuilt) AutoSelectorProfiles.save(id, selector)
-                    selector to prunedBuilt
-                } ?: continue
-                if (running == null || running.build.selectorId != id) continue
-                // A replaced member keeps its id, so only the disturbed set spots it.
-                if (prunedBuilt || selector.lastBuilt.any { it in disturbedSet }) restart = true
+            if (running == null) return@launch
+            val selector = AutoSelectorProfiles.load(running.build.selectorId) ?: return@launch
+            if (gid !in selector.gids) return@launch
+            val touchedActiveMembers = disturbed.any { it in running.build.memberIds }
+            if (touchedActiveMembers) {
+                Logs.i("[Auto selector] Subscription changed an active profile; keeping the immutable running config until disconnect or a real runtime failure.")
+                post("订阅已更新；为保护当前连接，本次运行继续使用原节点配置")
             }
-            if (!restart || running == null) return@launch
-            Logs.i("[Auto selector] The subscription replaced profiles it was running on — rebuilding.")
-            post(R.string.autosel_notice_subscription)
-            withContext(Dispatchers.Main) { if (current() === running) rebuild(running, null) }
         }
     }
 
@@ -408,15 +401,11 @@ object AutoSelectorRuntime {
         val proxy = settled(service)?.takeIf { it.profile.id == selectorId }
         val built = proxy?.config?.autoSelector?.memberIds
         val changed = AutoSelectorProfiles.writes.withLock { AutoSelectorProfiles.rerankChanges(selectorId, built) }
-        if (!changed) return
-        withContext(Dispatchers.Main) {
-            val data = service.data
-            val same = data.proxy === proxy && data.state == BaseService.State.Connected && DataStore.selectedProxy == selectorId
-            // A pending restart (another profile, a rebuild) replaces this run anyway.
-            if (!same || synchronized(lock) { pending != null }) return@withContext
-            Logs.i("[Auto selector] Every profile is measured and the best ones changed — rebuilding with the full ranking.")
-            synchronized(lock) { rankedFor = selectorId }
-            service.stopRunner(true)
+        if (changed) {
+            // Policy A: a better ranking discovered after startup is for the NEXT connection only.
+            // Do not stop/rebuild the active runner merely because a faster candidate was measured.
+            Logs.i("[Auto selector] Ranking improved after startup; keeping the active node/configuration. The new ranking applies on the next connection.")
+            post("已完成后台测速；当前连接保持不变，新排序将在下次连接时使用")
         }
     }
 
