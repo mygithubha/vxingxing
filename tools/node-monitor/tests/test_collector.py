@@ -34,7 +34,7 @@ class CollectorTests(unittest.TestCase):
         self.assertTrue(all("20261104" in item.url for item in result))
 
     def test_txt_subscription_probe_decodes_base64_and_counts_nodes(self):
-        encoded = base64.b64encode(b"vless://one\\nvmess://two").decode("ascii")
+        encoded = base64.b64encode(b"vless://one\nvmess://two").decode("ascii")
         item = extract_public_subscriptions(
             f"https://www.yudou89.shop/202611/20261104abc.txt",
             date(2026, 11, 4),
@@ -48,7 +48,7 @@ class CollectorTests(unittest.TestCase):
             "https://www.yudou89.shop/202611/20261104abc.yaml",
             date(2026, 11, 4),
         )[0]
-        payload = b"proxies:\\n  - name: node-one\\n  - name: node-two\\n"
+        payload = b"proxies:\n  - name: node-one\n  - name: node-two\n"
         checked = probe_subscription(item, fetcher=lambda _: payload)
         self.assertTrue(checked.valid)
         self.assertEqual(checked.node_count, 2)
