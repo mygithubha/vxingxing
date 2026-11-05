@@ -614,7 +614,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                                         refreshNodeChoiceUi()
                                         AlertDialog.Builder(requireContext())
                                             .setTitle("是否立即连接？")
-                                            .setMessage("已锁定所选节点。是否现在连接？手动模式连接失败不会自动更换节点。")
+                                            .setMessage(if (DataStore.serviceState.started) "已保存手动节点。当前连接保持不变；断开后再连接才会应用严格手动模式。" else "已锁定所选节点。是否现在连接？手动模式连接失败不会自动更换节点。")
                                             .setPositiveButton("立即连接") { _, _ ->
                                                 if (DataStore.serviceState.connected || DataStore.serviceState.started) {
                                                     status.text = "已保存手动节点。请先断开当前连接，再点击连接按钮使用该节点。"
