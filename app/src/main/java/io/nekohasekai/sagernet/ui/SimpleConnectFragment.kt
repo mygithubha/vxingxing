@@ -77,11 +77,10 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         }
         selectNodeButton.setOnClickListener { showNodePicker() }
         val connectionPrefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
-        rememberLastNode.isChecked = connectionPrefs.getBoolean("remember_last_node_enabled", false)
-        rememberLastNode.setOnCheckedChangeListener { _, checked ->
-            connectionPrefs.edit().putBoolean("remember_last_node_enabled", checked).apply()
-            updateNodeMonitor(AutoSelectorClient.status.value)
-        }
+        // Remembering the last successful node is core behavior, not an optional optimization.
+        connectionPrefs.edit().putBoolean("remember_last_node_enabled", true).apply()
+        rememberLastNode.isChecked = true
+        rememberLastNode.isEnabled = false
         appsSummary = view.findViewById(R.id.proxy_apps_summary)
         currentNode = view.findViewById(R.id.current_node_status)
         nodeHealth = view.findViewById(R.id.node_health_status)
@@ -161,10 +160,9 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
             val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
             connectButton.isEnabled = false
             val manualMode = prefs.getBoolean("manual_mode", false)
-            val rememberEnabled = prefs.getBoolean("remember_last_node_enabled", false)
             val selectorId = DataStore.selectedProxy
             val preferredId = if (manualMode) prefs.getLong("manual_node_id", -1L)
-                else if (rememberEnabled && prefs.getLong("last_selector_id", -1L) == selectorId)
+                else if (prefs.getLong("last_selector_id", -1L) == selectorId)
                     prefs.getLong("last_node_id", -1L) else -1L
             status.text = when {
                 manualMode -> "正在检查你选定的节点…"
@@ -177,7 +175,12 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                 try {
                     if (preferredId > 0L) {
                         withContext(Dispatchers.IO) {
-                            TestEngine.queueIpTests(listOf(preferredId))
+                            // Geo lookup is a one-time prerequisite. Once country/IP are known, never repeat it
+                            // on every tap; only run the lightweight health/URL probe for this one remembered node.
+                            val beforeIp = ProfileManager.getProfile(preferredId)
+                            if (beforeIp?.ipOut.isNullOrBlank() || beforeIp?.testCountry.isNullOrBlank()) {
+                                TestEngine.queueIpTests(listOf(preferredId))
+                            }
                             val afterIp = ProfileManager.getProfile(preferredId)
                             if (!afterIp?.ipOut.isNullOrBlank() && !afterIp?.testCountry.isNullOrBlank()) {
                                 TestEngine.queueUrlTests(listOf(preferredId))
@@ -203,20 +206,43 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                             selector.countryFilter = countryFilters.joinToString(",")
                             when {
                                 manualMode -> {
-                                    // Manual mode is a hard lock: the core receives exactly one candidate.
-                                    // A failed probe is rejected above; it must never silently fall back.
+                                    // Strict manual mode: shrink the generated selector build to exactly one
+                                    // member. pinnedID alone is only a preference in the core, not an exclusion
+                                    // of every other subscription member.
+                                    val buildKey = "auto_build_limit_$selectorId"
+                                    val capKey = "auto_pool_cap_$selectorId"
+                                    if (!prefs.contains(buildKey)) prefs.edit()
+                                        .putInt(buildKey, selector.buildLimit)
+                                        .putInt(capKey, selector.poolCap)
+                                        .apply()
                                     selector.pinnedID = preferredId
                                     selector.pool = mutableListOf(preferredId)
+                                    selector.poolCap = 1
+                                    selector.buildLimit = 1
                                     selector.poolRankedAt = System.currentTimeMillis() / 1000
                                 }
                                 preferredHealthy -> {
-                                    // Keep the remembered member first while retaining the full automatic pool.
+                                    // Restore normal multi-node auto mode while keeping the last good node first.
+                                    val buildKey = "auto_build_limit_$selectorId"
+                                    val capKey = "auto_pool_cap_$selectorId"
+                                    if (prefs.contains(buildKey)) {
+                                        selector.buildLimit = prefs.getInt(buildKey, selector.buildLimit)
+                                        selector.poolCap = prefs.getInt(capKey, selector.poolCap)
+                                        prefs.edit().remove(buildKey).remove(capKey).apply()
+                                    }
                                     selector.pinnedID = preferredId
                                     selector.pool = (listOf(preferredId) +
                                         selector.pool.filterNot { it == preferredId }).toMutableList()
                                 }
                                 else -> {
                                     // Restore every eligible subscription member before automatic ranking.
+                                    val buildKey = "auto_build_limit_$selectorId"
+                                    val capKey = "auto_pool_cap_$selectorId"
+                                    if (prefs.contains(buildKey)) {
+                                        selector.buildLimit = prefs.getInt(buildKey, selector.buildLimit)
+                                        selector.poolCap = prefs.getInt(capKey, selector.poolCap)
+                                        prefs.edit().remove(buildKey).remove(capKey).apply()
+                                    }
                                     selector.pinnedID = -1L
                                     selector.pool = selector.gids.distinct()
                                         .flatMap { ProfileManager.members(it) }
@@ -245,9 +271,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         updateNodeMonitor(AutoSelectorClient.status.value)
         viewLifecycleOwner.lifecycleScope.launch {
             AutoSelectorClient.status.collect { selectorStatus ->
-                if (requireContext().getSharedPreferences("simple_auto_connect", 0)
-                        .getBoolean("remember_last_node_enabled", false) &&
-                    selectorStatus.phase == AutoSelectorStatus.PHASE_RUNNING && selectorStatus.selectedId > 0L &&
+                if (selectorStatus.phase == AutoSelectorStatus.PHASE_RUNNING && selectorStatus.selectedId > 0L &&
                     (selectorStatus.selectedState == AutoSelectorStatus.STATE_OK ||
                         selectorStatus.selectedState == AutoSelectorStatus.STATE_DEGRADED)) {
                     // Remember the node the core is actually using, including any automatic failover.
@@ -434,9 +458,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
     private fun updateNodeMonitor(selectorStatus: AutoSelectorStatus) {
         if (!::currentNode.isInitialized || !::nodeHealth.isInitialized) return
         val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
-        val rememberedName = if (prefs.getBoolean("remember_last_node_enabled", false)) {
-            prefs.getString("last_node_name", null).orEmpty()
-        } else ""
+        val rememberedName = prefs.getString("last_node_name", null).orEmpty()
         when (selectorStatus.phase) {
             AutoSelectorStatus.PHASE_MEASURING -> {
                 currentNode.text = if (rememberedName.isNotBlank()) "上次节点：$rememberedName" else "当前节点：正在检测节点池"
