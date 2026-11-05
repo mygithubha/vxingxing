@@ -70,6 +70,9 @@ class AutoSelector : Outbound("autoselector") {
     /** Unix seconds. */
     @JvmField var poolRankedAt: Long = 0
 
+    /** True only for the pinned member when strict manual mode is active. */
+    fun allowsMember(id: Long): Boolean = !strictPinned || id == pinnedID
+
     /** Hand-picked member id, -1 = automatic. */
     @JvmField var pinnedID: Long = -1
     /** Hard lock: pinnedID is the only eligible member in manual mode. */
