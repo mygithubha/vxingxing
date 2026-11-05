@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="#F5F6FA">
 <include layout="@layout/layout_appbar" android:layout_width="match_parent" android:layout_height="wrap_content"/>
 <ScrollView android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:padding="20dp">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
@@ -10,11 +10,16 @@
 <com.google.android.material.button.MaterialButton android:id="@+id/import_subscription" android:layout_width="match_parent" android:layout_height="54dp" android:layout_marginTop="10dp" android:text="导入订阅"/>
 <com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" app:cardCornerRadius="18dp" app:cardElevation="0dp">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="18dp">
-<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="自动测速与连接" android:textSize="18sp" android:textStyle="bold"/>
+<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="连接控制" android:textSize="20sp" android:textStyle="bold"/>
 <TextView android:id="@+id/connection_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="等待导入订阅"/>
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:gravity="center_vertical" android:orientation="horizontal">
 <TextView android:id="@+id/current_node_status" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="当前节点：尚未连接" android:textSize="13sp" android:maxLines="2"/>
 <TextView android:id="@+id/node_health_status" android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingStart="10dp" android:paddingEnd="10dp" android:paddingTop="6dp" android:paddingBottom="6dp" android:text="未连接" android:textStyle="bold" android:textSize="12sp"/>
+</LinearLayout>
+<TextView android:id="@+id/selected_node_summary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:padding="14dp" android:background="#F1F3F8" android:text="自动模式：优先复用上次成功节点" android:textColor="#273247" android:textSize="13sp"/>
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="horizontal">
+<com.google.android.material.button.MaterialButton android:id="@+id/select_node" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:text="手动选择节点" app:cornerRadius="14dp" app:backgroundTint="#E8EEFF" android:textColor="#3157B7"/>
+<com.google.android.material.button.MaterialButton android:id="@+id/automatic_mode" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:layout_marginStart="8dp" android:text="切回自动模式" app:cornerRadius="14dp" app:backgroundTint="#F0F1F5" android:textColor="#344054"/>
 </LinearLayout>
 <com.google.android.material.button.MaterialButton android:id="@+id/connect_best_node" android:layout_width="match_parent" android:layout_height="58dp" android:layout_marginTop="14dp" android:text="测速并连接最佳节点"/>
 <CheckBox android:id="@+id/remember_last_node" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="记住上次连接的节点（勾选启用，取消勾选关闭）" android:textSize="13sp"/>
