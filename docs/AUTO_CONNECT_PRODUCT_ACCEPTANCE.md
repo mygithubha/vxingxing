@@ -37,6 +37,7 @@ App name: Auto Connect.
 3. Enrich unknown IP/country/latency asynchronously without blocking the list.
 4. Interaction is two-stage: select a row, confirm selection, then ask whether to connect immediately.
 5. Connect only the explicitly selected node. A failed manual connection MUST NOT silently fall back to another node.
+   If a connected strict-manual node becomes unavailable, report the failure and do not auto-rebuild or switch to a different node.
 6. Returning to automatic mode restores automatic pool semantics without misrepresenting the currently running configuration.
 
 ## Node sources and health
