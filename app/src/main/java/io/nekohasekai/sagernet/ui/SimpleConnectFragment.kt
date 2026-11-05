@@ -381,7 +381,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         if (!autoConnectAttemptedInProcess) {
             autoConnectAttemptedInProcess = true
             viewLifecycleOwner.lifecycleScope.launch {
-                repeat(30) {
+                repeat(90) {
                     if (!isAdded || DataStore.serviceState.started) return@launch
                     val selectorId = DataStore.selectedProxy
                     val count = if (selectorId > 0L) withContext(Dispatchers.IO) {
