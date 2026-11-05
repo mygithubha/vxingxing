@@ -127,13 +127,13 @@ class MainActivity : ThemedActivity(),
         })
 
         if (savedInstanceState == null) {
-            displayFragmentWithId(R.id.nav_configuration)
+            displayFragment(SimpleConnectFragment())
         } else {
             currentMainFragment =
                 supportFragmentManager.findFragmentById(R.id.fragment_holder) as? ToolbarFragment
         }
         onBackPressedDispatcher.addCallback {
-            if (supportFragmentManager.findFragmentById(R.id.fragment_holder) is ConfigurationFragment) {
+            if (supportFragmentManager.findFragmentById(R.id.fragment_holder) is SimpleConnectFragment || supportFragmentManager.findFragmentById(R.id.fragment_holder) is ConfigurationFragment) {
                 moveTaskToBack(true)
             } else {
                 displayFragmentWithId(R.id.nav_configuration)
@@ -557,7 +557,7 @@ class MainActivity : ThemedActivity(),
     private val firstStart = FirstStartPrompts(this)
     private val wifiFlow = WifiPermissionFlow(this)
 
-    private fun toggleService() {
+    fun toggleService() {
         if (DataStore.serviceState.canStop) SagerNet.stopService() else startFromUi()
     }
 
