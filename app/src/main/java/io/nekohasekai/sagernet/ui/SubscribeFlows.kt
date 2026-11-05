@@ -11,6 +11,7 @@ import io.nekohasekai.sagernet.database.GroupRepo
 import io.nekohasekai.sagernet.databinding.LayoutRouteRemotePromptBinding
 import io.nekohasekai.sagernet.databinding.LayoutSubscribeChoiceBinding
 import io.nekohasekai.sagernet.group.SubscriptionClient
+import io.nekohasekai.sagernet.group.PublicSubscriptionBootstrap
 import io.nekohasekai.sagernet.ktx.Logs
 import io.nekohasekai.sagernet.ktx.app
 import io.nekohasekai.sagernet.ktx.onMainDispatcher
@@ -192,8 +193,9 @@ object SubscribeFlows {
             try {
                 val gid = SubscriptionClient.subscribeUrl(url, name, autoUpdate)
                 if (gid > 0) {
+                    PublicSubscriptionBootstrap.attachGroup(gid)
                     GroupRepo.setCurrent(gid)
-                    onMainDispatcher { (activity as? MainActivity)?.showGroup(gid) }
+                    onMainDispatcher { notify(activity, "订阅已添加，自动选优配置已就绪。点击首页连接即可测速并连接最佳节点。") }
                 }
             } catch (e: Exception) {
                 Logs.w(e)
