@@ -1,5 +1,6 @@
 package io.nekohasekai.sagernet
 
+import io.nekohasekai.sagernet.bg.shouldRestrictToSelfOnly
 import io.nekohasekai.sagernet.database.SettingsRegistry
 import io.nekohasekai.sagernet.ktx.PreferenceProxy
 import org.junit.Assert.assertEquals
@@ -50,6 +51,14 @@ class TestSettingsContractTest {
         assertEquals(SpeedTestSettings.MODE_SIMPLE_DOWNLOAD, SpeedTestSettings.modeName(SpeedTestSettings.SIMPLE_DOWNLOAD))
         assertEquals(SpeedTestSettings.MODE_COUNTRY, SpeedTestSettings.modeName(SpeedTestSettings.COUNTRY))
         assertEquals(SpeedTestSettings.MODE_DOWNLOAD_UPLOAD, SpeedTestSettings.modeName(42))
+    }
+
+    @Test
+    fun emptySelectedAppAllowlistFailsClosed() {
+        assertTrue(shouldRestrictToSelfOnly(proxyAppsEnabled = true, bypassMode = false, includePackageCount = 0))
+        assertFalse(shouldRestrictToSelfOnly(proxyAppsEnabled = true, bypassMode = false, includePackageCount = 1))
+        assertFalse(shouldRestrictToSelfOnly(proxyAppsEnabled = true, bypassMode = true, includePackageCount = 0))
+        assertFalse(shouldRestrictToSelfOnly(proxyAppsEnabled = false, bypassMode = false, includePackageCount = 0))
     }
 
     private fun <T : Any> proxy(
