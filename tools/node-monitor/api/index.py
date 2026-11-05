@@ -45,7 +45,7 @@ def _record(result) -> dict:
 @app.get("/api/cron")
 def run_daily_collection(
     authorization: str | None = Header(default=None),
-    response: Response = None,
+    response: Response,
 ):
     if not _authorized(authorization, "CRON_SECRET"):
         raise HTTPException(status_code=401, detail="Unauthorized")
