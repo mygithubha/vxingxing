@@ -24,6 +24,7 @@ import io.nekohasekai.sagernet.bg.autoselector.AutoSelectorRuntime
 import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.SettingsMapper
 import io.nekohasekai.sagernet.group.RemoteRouteUpdater
+import io.nekohasekai.sagernet.group.PublicSubscriptionBootstrap
 import io.nekohasekai.sagernet.group.SubscriptionScheduler
 import io.nekohasekai.sagernet.ktx.Logs
 import io.nekohasekai.sagernet.ktx.isOss
@@ -99,6 +100,7 @@ class SagerNet : Application(),
             runOnDefaultDispatcher { File(filesDir, "custom_icon").deleteRecursively() }
             RemoteRouteUpdater.schedule()
             SubscriptionScheduler.schedule()
+            PublicSubscriptionBootstrap.schedule()
             Widgets.watchSelection(this)
         }
 
