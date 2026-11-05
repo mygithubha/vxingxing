@@ -434,6 +434,7 @@ class MainActivity : ThemedActivity(),
         DataStore.serviceState = state
         refreshConfigurationProfileState()
         when (val fragment = currentMainFragment ?: supportFragmentManager.findFragmentById(R.id.fragment_holder)) {
+            is SimpleConnectFragment -> fragment.refreshUiState()
             is RouteFragment -> fragment.onServiceStateChanged()
             is DashboardFragment -> fragment.onServiceStateChanged()
         }
