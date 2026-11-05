@@ -5,10 +5,5 @@
       "path": "/api/cron",
       "schedule": "0 0 * * *"
     }
-  ],
-  "functions": {
-    "api/*.py": {
-      "excludeFiles": "{tests/**,__pycache__/**,**/*.pyc}"
-    }
-  }
+  ]
 }
