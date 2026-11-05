@@ -114,7 +114,7 @@ internal object PublicSubscriptionBootstrap {
             ProfileManager.updateOutbound(existing)
             existing
         }
-        DataStore.selectedProxy = selectorProfile.id
+        if (!DataStore.serviceState.started) DataStore.selectedProxy = selectorProfile.id
         Logs.i("[Auto Connect] Attached subscription group $groupId to the automatic node selector.")
         return selectorProfile.id
     }
