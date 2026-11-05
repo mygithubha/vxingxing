@@ -156,6 +156,15 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                             } else {
                                 -1L
                             }
+                            // Keep these regions out of the Auto Connect pool. The subscription rows remain stored.
+                            val excludedCountries = setOf("CN", "HK", "MO", "TW")
+                            val countryFilters = selector.countryFilter.split(',')
+                                .map { it.trim() }
+                                .filter { it.isNotEmpty() }
+                                .toMutableSet()
+                            excludedCountries.forEach { countryFilters.add("!$it") }
+                            selector.countryFilter = countryFilters.joinToString(",")
+
                             // A pin is a preference, not a hard lock: the core uses another healthy member
                             // while this remembered member is dead, then can return to it after recovery.
                             selector.pinnedID = rememberedId.takeIf { it > 0L } ?: -1L
