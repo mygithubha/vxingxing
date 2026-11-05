@@ -26,7 +26,6 @@ ALLOWED_SUBSCRIPTION_HOST = "www.yudou89.shop"
 MAX_PAGE_BYTES = 3 * 1024 * 1024
 USER_AGENT = "AutoConnectNodeMonitor/1.0 (+date-scoped public-page checker)"
 DATE_TITLE_RE = re.compile(r"(20\d{2})年(\d{1,2})月(\d{1,2})日")
-URL_RE = re.compile(r"https?://[^\\s\\\"'<>]+", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -95,7 +94,7 @@ def find_exact_article(category_html: str, target: date, base_url: str = CATEGOR
         parsed = urlparse(article_url)
         if parsed.scheme != "https" or parsed.hostname != urlparse(base_url).hostname:
             continue
-        if not re.fullmatch(r"/[0-9]+\\.html", parsed.path):
+        if not re.fullmatch(r"/[0-9]+\.html", parsed.path):
             continue
         return Article(target.isoformat(), article_url, title)
     return None
@@ -105,7 +104,7 @@ def extract_public_subscriptions(article_html: str, target: date) -> tuple[Subsc
     """Extract only directly published URLs; never execute password/decryption scripts."""
     parser = AnchorCollector()
     parser.feed(article_html)
-    candidates = [data for data in re.findall(r"https?://[^\\s\\\"'<>]+", article_html, re.IGNORECASE)]
+    candidates = [data for data in re.findall(r"https?://[^\s\"'<>]+", article_html, re.IGNORECASE)]
     candidates.extend(href for href, _ in parser.anchors if href and href.startswith("https://"))
     found: dict[str, Subscription] = {}
     expected_date = target.strftime("%Y%m%d")
