@@ -340,11 +340,11 @@ internal object SubscriptionRefresh {
         members = members.filter { it.id !in stickyIds }
 
         val routeNames = SubscriptionRouteRebind.referencedNames(members)
+        val runningIds = ProfileManager.runningProfileIds()
         var cleared = false
         var stopped: ProxyEntity? = null
         if (DataStore.subClear) {
             Logs.i(str(R.string.subs_clearing))
-            val runningIds = ProfileManager.runningProfileIds()
             val doomed = members.filter { it.id !in runningIds && (!options.keepWorking || !it.isWorking()) }
             val outcome = ProfileManager.batchDeleteProfiles(doomed.map { it.id })
             if (!outcome.ok) {
