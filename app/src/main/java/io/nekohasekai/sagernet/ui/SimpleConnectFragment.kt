@@ -228,7 +228,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                 "文章日期：${pending.targetDate}\n" +
                     "预计节点数：${item.nodeCount}\n\n" +
                     "只有点击“确认导入”后，App 才会获取订阅地址并进入现有导入流程。\n" +
-                    "采集过程不会自动覆盖当前配置。"
+                    "确认后会创建独立订阅组并切换到新组，原订阅组会保留，不会被覆盖。"
             )
             .setNegativeButton("取消", null)
             .setPositiveButton("确认导入") { _, _ ->
