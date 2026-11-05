@@ -173,6 +173,18 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                 var manualRejected = false
                 var preferredHealthy = false
                 try {
+                    if (manualMode) {
+                        val belongsToCurrentSubscription = withContext(Dispatchers.IO) {
+                            val currentSelector = AutoSelectorProfiles.load(selectorId) ?: return@withContext false
+                            currentSelector.gids.distinct()
+                                .flatMap { ProfileManager.members(it) }
+                                .any { it.id == preferredId && it.type != "autoselector" }
+                        }
+                        if (!belongsToCurrentSubscription) {
+                            manualRejected = true
+                            return@launch
+                        }
+                    }
                     if (preferredId > 0L) {
                         withContext(Dispatchers.IO) {
                             // Geo lookup is a one-time prerequisite. Once country/IP are known, never repeat it
@@ -408,40 +420,106 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
     }
 
     private fun showNodePicker() {
-        val selector = AutoSelectorProfiles.load(DataStore.selectedProxy) ?: return
-        val members = selector.gids.distinct().flatMap { ProfileManager.members(it) }
-            .distinctBy { it.id }
-            .filter { it.type != "autoselector" && it.testCountry?.uppercase() !in setOf("CN", "HK", "MO", "TW") }
-        if (members.isEmpty()) {
-            status.text = "当前订阅组没有可供选择的节点"
+        val selectorId = DataStore.selectedProxy
+        if (selectorId <= 0L) {
+            status.text = "请先导入订阅链接"
             return
         }
-        val labels = members.map { profile ->
-            val ip = profile.ipOut?.takeIf { it.isNotBlank() } ?: "IP待检测"
-            val country = profile.testCountry?.takeIf { it.isNotBlank() } ?: "地区待检测"
-            val latency = when {
-                profile.latency > 0 -> "${profile.latency} ms"
-                profile.latency == ProxyEntity.LATENCY_CONNECT_ONLY -> "已连通"
-                profile.latency < 0 -> "不可用"
-                else -> "未测速"
+        selectNodeButton.isEnabled = false
+        status.text = "正在检测节点出口 IP、国家和连通性…"
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val candidateIds = withContext(Dispatchers.IO) {
+                    val selector = AutoSelectorProfiles.load(selectorId)
+                        ?: throw IllegalStateException("当前自动选择器不存在，请重新导入订阅")
+                    selector.gids.distinct()
+                        .flatMap { ProfileManager.members(it) }
+                        .filter { it.type != "autoselector" }
+                        .map { it.id }
+                        .distinct()
+                }
+                if (candidateIds.isEmpty()) {
+                    status.text = "当前订阅组没有节点"
+                    return@launch
+                }
+
+                // The queue methods are suspending and return only after their results have been persisted.
+                val unknownGeoIds = withContext(Dispatchers.IO) {
+                    candidateIds.filter { id ->
+                        val profile = ProfileManager.getProfile(id)
+                        profile?.ipOut.isNullOrBlank() || profile?.testCountry.isNullOrBlank()
+                    }
+                }
+                if (unknownGeoIds.isNotEmpty()) {
+                    withContext(Dispatchers.IO) { TestEngine.queueIpTests(unknownGeoIds) }
+                }
+
+                val geoQualifiedIds = withContext(Dispatchers.IO) {
+                    candidateIds.filter { id ->
+                        val profile = ProfileManager.getProfile(id) ?: return@filter false
+                        val country = profile.testCountry?.trim()?.uppercase().orEmpty()
+                        !profile.ipOut.isNullOrBlank() && country.isNotBlank() &&
+                            country !in setOf("CN", "HK", "MO", "TW")
+                    }
+                }
+                if (geoQualifiedIds.isEmpty()) {
+                    status.text = "没有地区已确认且符合过滤规则的节点；未知地区不会放行"
+                    return@launch
+                }
+
+                withContext(Dispatchers.IO) { TestEngine.queueUrlTests(geoQualifiedIds) }
+                val usableMembers = withContext(Dispatchers.IO) {
+                    val currentSelector = AutoSelectorProfiles.load(selectorId)
+                        ?: throw IllegalStateException("订阅已变化，请重新打开节点列表")
+                    val currentGroupIds = currentSelector.gids.distinct()
+                    val currentIds = currentGroupIds.flatMap { ProfileManager.members(it) }
+                        .filter { it.type != "autoselector" }
+                        .map { it.id }
+                        .toSet()
+                    geoQualifiedIds.filter { it in currentIds }
+                        .mapNotNull { ProfileManager.getProfile(it) }
+                        .filter { profile ->
+                            val country = profile.testCountry?.trim()?.uppercase().orEmpty()
+                            !profile.ipOut.isNullOrBlank() && country.isNotBlank() &&
+                                country !in setOf("CN", "HK", "MO", "TW") &&
+                                (profile.latency > 0 || profile.latency == ProxyEntity.LATENCY_CONNECT_ONLY)
+                        }
+                }
+                if (usableMembers.isEmpty()) {
+                    status.text = "检测完成：没有可用且符合地区规则的节点"
+                    return@launch
+                }
+
+                val labels = usableMembers.map { profile ->
+                    val latency = if (profile.latency == ProxyEntity.LATENCY_CONNECT_ONLY) {
+                        "已连通"
+                    } else {
+                        "${profile.latency} ms"
+                    }
+                    "${profile.displayName()}\n${profile.ipOut}   ·   ${profile.testCountry}   ·   $latency"
+                }.toTypedArray()
+                val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, labels)
+                AlertDialog.Builder(requireContext())
+                    .setTitle("选择节点（已检测）")
+                    .setMessage("仅显示 IP/国家已确认、地区符合规则且连通性检测通过的节点。选择后严格锁定，不自动切换。")
+                    .setAdapter(adapter) { dialog, which ->
+                        val selected = usableMembers[which]
+                        requireContext().getSharedPreferences("simple_auto_connect", 0).edit()
+                            .putBoolean("manual_mode", true)
+                            .putLong("manual_node_id", selected.id)
+                            .apply()
+                        refreshNodeChoiceUi()
+                        dialog.dismiss()
+                    }
+                    .setNegativeButton("取消", null)
+                    .show()
+                status.text = "检测完成：找到 ${usableMembers.size} 个可用节点"
+            } catch (e: Exception) {
+                status.text = "节点检测失败：${e.message ?: "请重试"}"
+            } finally {
+                selectNodeButton.isEnabled = true
             }
-            "${profile.displayName()}\n$ip   ·   $country   ·   $latency"
-        }.toTypedArray()
-        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, labels)
-        AlertDialog.Builder(requireContext())
-            .setTitle("选择节点")
-            .setMessage("选择后将严格连接该节点；不可用时不会自动切换。")
-            .setAdapter(adapter) { dialog, which ->
-                val selected = members[which]
-                requireContext().getSharedPreferences("simple_auto_connect", 0).edit()
-                    .putBoolean("manual_mode", true)
-                    .putLong("manual_node_id", selected.id)
-                    .apply()
-                refreshNodeChoiceUi()
-                dialog.dismiss()
-            }
-            .setNegativeButton("取消", null)
-            .show()
+        }
     }
 
     private fun updateAppsSummary() {
