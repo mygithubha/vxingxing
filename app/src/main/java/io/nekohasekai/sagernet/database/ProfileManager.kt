@@ -116,9 +116,13 @@ object ProfileManager {
      * hops, the group's landing / front proxy, auto-selector members, route outbounds), RunningUsesProfile.
      */
     fun runningUses(profileId: Long): Boolean {
+        if (profileId <= 0L) return false
         val running = runningProfileId()
-        if (running <= 0L || profileId <= 0L) return false
-        return profileId == running || profileId.toString() in DataStore.runningProfiles
+        // Include the selected target while the service is starting, before currentProfile and
+        // runningProfiles are populated. Once connected, runningProfiles also covers selector members.
+        return profileId == running ||
+            (DataStore.serviceState.started && profileId == DataStore.selectedProxy) ||
+            profileId.toString() in DataStore.runningProfiles
     }
 
     // ------------------------------------------------------------------------------------------------ add
