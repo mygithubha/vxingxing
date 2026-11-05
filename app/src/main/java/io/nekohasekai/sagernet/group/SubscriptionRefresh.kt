@@ -161,7 +161,7 @@ internal object SubscriptionRefresh {
             ProfileManager.setOrder(gid, order)
 
             var deletedNames: List<String> = plan.deleted
-            if (keptWorking.isNotEmpty()) {
+            if (workingIds.isNotEmpty()) {
                 val doomed = stale.toHashSet()
                 deletedNames = old.filter { it.id in doomed }.map { it.display }
             }
@@ -176,7 +176,7 @@ internal object SubscriptionRefresh {
             if (workingNames.isNotEmpty()) {
                 changeText += "\n" + str(R.string.subs_working_kept, notice(workingNames, "[=]", "kept"))
             }
-            if (plan.added.isEmpty() && plan.updates.isEmpty() && deletedNames.isEmpty() && keptWorking.isEmpty()) {
+            if (plan.added.isEmpty() && plan.updates.isEmpty() && deletedNames.isEmpty() && workingIds.isEmpty()) {
                 changeText = str(R.string.subs_nothing)
             }
         }
