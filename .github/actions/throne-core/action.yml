@@ -83,7 +83,42 @@ runs:
         python3 "$GITHUB_WORKSPACE/scripts/patch_autoselector_failure_only.py" "$PATCH_DIR"
         go mod edit -replace="github.com/sagernet/sing-box=$PATCH_DIR"
         echo "SING_BOX_PATCH_DIR=$PATCH_DIR" >> "$GITHUB_ENV"
-        (cd "$PATCH_DIR" && go test ./protocol/group)
+        (cd "$PATCH_DIR" && go test -count=1 ./protocol/group -run '^(TestCooldownBackoffAndRollback|TestDialFailureOnlyAppliesCooldownAfterThreeConsecutiveFailures|TestRoutedDialFailureMovesSelectionOffAfterThreeFailures)
+    - name: Build ThroneCore AAR
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: ${{ env.THRONE_DIR }}
+      run: DEST="$GITHUB_WORKSPACE/app/libs" bash script/build_android.sh
+    # Same registries as the AAR: the Android TAGS of script/build_android.sh (cf. script/gen_schema.sh). with_purego and
+    # CGO_ENABLED=0 only keep cronet-go from linking its static library; option registration does not depend on them.
+    - name: Generate sing-box schema
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: ${{ env.THRONE_DIR }}/core
+      run: |
+        set -euo pipefail
+        TAGS=$(sed -n 's/^TAGS="\(.*\)"$/\1/p' ../script/build_android.sh)
+        test -n "$TAGS"
+        OUT="$GITHUB_WORKSPACE/app/src/main/assets/schema/sing-box.json"
+        mkdir -p "$(dirname "$OUT")"
+        CGO_ENABLED=0 go run -trimpath -ldflags=-checklinkname=0 -tags "$TAGS,with_purego" ./cmd/schemagen -o "$OUT"
+    - name: Verify ThroneCore AAR and schema
+      shell: bash
+      run: |
+        set -euo pipefail
+        test -s app/libs/ThroneCore.aar
+        unzip -l app/libs/ThroneCore.aar > "$RUNNER_TEMP/throne-core-aar.txt"
+        unzip -p app/libs/ThroneCore.aar classes.jar > "$RUNNER_TEMP/throne-core-classes.jar"
+        unzip -l "$RUNNER_TEMP/throne-core-classes.jar" > "$RUNNER_TEMP/throne-core-classes.txt"
+        grep -q 'io/throneproj/mobile/Mobile.class' "$RUNNER_TEMP/throne-core-classes.txt"
+        grep -q 'go/Seq.class' "$RUNNER_TEMP/throne-core-classes.txt"
+        # the APK splits (buildSrc Helpers.kt) must match the core targets
+        for abi in arm64-v8a armeabi-v7a x86_64; do
+          grep -q "jni/$abi/libthrone.so" "$RUNNER_TEMP/throne-core-aar.txt" \
+            || { echo "::error::ThroneCore.aar has no jni/$abi/libthrone.so"; exit 1; }
+        done
+        python3 -c 'import json, sys; json.load(open(sys.argv[1]))' app/src/main/assets/schema/sing-box.json
+)
     - name: Build ThroneCore AAR
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
