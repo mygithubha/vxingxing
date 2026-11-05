@@ -10,6 +10,7 @@ Security properties:
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import re
 import sys
@@ -39,6 +40,8 @@ class Article:
 class Subscription:
     kind: str
     url: str
+    valid: bool | None = None
+    node_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -125,15 +128,45 @@ def extract_public_subscriptions(article_html: str, target: date) -> tuple[Subsc
     return tuple(found[url] for url in sorted(found, key=lambda u: (found[u].kind, u)))
 
 
-def _fetch(url: str, timeout: int = 20) -> str:
+def _fetch_bytes(url: str, timeout: int = 20) -> bytes:
     request = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,*/*;q=0.8"})
     with urlopen(request, timeout=timeout) as response:
         if response.status != 200:
             raise RuntimeError(f"HTTP status {response.status}")
         payload = response.read(MAX_PAGE_BYTES + 1)
     if len(payload) > MAX_PAGE_BYTES:
-        raise RuntimeError("page exceeded size limit")
-    return payload.decode("utf-8", errors="replace")
+        raise RuntimeError("response exceeded size limit")
+    return payload
+
+
+def _fetch(url: str, timeout: int = 20) -> str:
+    return _fetch_bytes(url, timeout).decode("utf-8", errors="replace")
+
+
+def probe_subscription(item: Subscription, fetcher=_fetch_bytes) -> Subscription:
+    """Check a subscription response and count recognizable proxy entries."""
+    try:
+        raw = fetcher(item.url)
+        text = raw.decode("utf-8-sig", errors="replace").strip()
+        if item.kind == "txt":
+            compact = re.sub(r"\\s+", "", text)
+            try:
+                decoded = base64.b64decode(compact + "=" * (-len(compact) % 4), validate=False)
+                decoded_text = decoded.decode("utf-8", errors="replace")
+                if "://" in decoded_text:
+                    text = decoded_text
+            except (ValueError, UnicodeError):
+                pass
+            count = len(re.findall(
+                r"(?i)(?:vmess|vless|ss|trojan|hysteria2?|tuic|socks5?)://", text
+            ))
+        else:
+            if not re.search(r"(?m)^\\s*proxies\\s*:", text):
+                return Subscription(item.kind, item.url, False, 0)
+            count = len(re.findall(r"(?m)^\\s*-\\s*(?:name|server|type)\\s*:", text))
+        return Subscription(item.kind, item.url, count > 0, count)
+    except (HTTPError, URLError, TimeoutError, OSError, RuntimeError, ValueError):
+        return Subscription(item.kind, item.url, False, 0)
 
 
 def collect(target: date, fetcher=_fetch) -> CollectionResult:
@@ -143,13 +176,16 @@ def collect(target: date, fetcher=_fetch) -> CollectionResult:
         if article is None:
             return CollectionResult(target.isoformat(), "not_found", None, None, (), "No exact-date article found")
         article_html = fetcher(article.url)
-        subscriptions = extract_public_subscriptions(article_html, target)
+        extracted = extract_public_subscriptions(article_html, target)
+        subscriptions = tuple(probe_subscription(item) for item in extracted)
         if not subscriptions:
             return CollectionResult(
                 target.isoformat(), "protected_or_missing", article.url, article.title, (),
                 "No directly published subscription URL found; no password or script bypass attempted",
             )
-        return CollectionResult(target.isoformat(), "success", article.url, article.title, subscriptions, "Public URLs extracted")
+        status = "success" if any(item.valid for item in subscriptions) else "invalid"
+        return CollectionResult(target.isoformat(), status, article.url, article.title, subscriptions,
+                                "Subscription responses checked")
     except (HTTPError, URLError, TimeoutError, OSError, RuntimeError, ValueError) as exc:
         # Do not include response bodies or subscription URLs in error messages.
         return CollectionResult(target.isoformat(), "error", None, None, (), type(exc).__name__)
