@@ -1,0 +1,67 @@
+name: Import audited Android base
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/import-upstream.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: upstream-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout product repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve product documentation and workflows
+        run: |
+          mkdir -p /tmp/product-meta
+          cp -a README.md docs .github/workflows /tmp/product-meta/
+
+      - name: Clone upstream source
+        run: |
+          git clone --depth 1 https://github.com/throneproj/ThroneForAndroid.git /tmp/throne-upstream
+          cd /tmp/throne-upstream
+          git rev-parse HEAD > /tmp/upstream-commit.txt
+          git describe --tags --always > /tmp/upstream-version.txt || true
+
+      - name: Import source while preserving product metadata
+        run: |
+          rsync -a --delete --exclude='.git' /tmp/throne-upstream/ ./
+          mkdir -p docs/upstream
+          cp /tmp/throne-upstream/README.md docs/upstream/README.md
+          cp /tmp/upstream-commit.txt docs/upstream/UPSTREAM_COMMIT
+          cp /tmp/upstream-version.txt docs/upstream/UPSTREAM_VERSION
+          cp -a /tmp/product-meta/README.md ./
+          cp -a /tmp/product-meta/docs/. docs/
+          mkdir -p .github/workflows
+          cp -a /tmp/product-meta/.github/workflows/. .github/workflows/
+          cat > AUTO_CONNECT_FORK_NOTICE.md <<'EOF'
+          # Auto Connect source fork notice
+
+          This repository contains modified source derived from Throne for Android.
+          Upstream project: https://github.com/throneproj/ThroneForAndroid
+          Upstream source revision and version are recorded in docs/upstream/.
+          The upstream project is licensed under GPL-3.0; see LICENSE and preserve
+          all upstream copyright and third-party notices. Changes in this repository
+          must be identified as modifications. This fork is not an official Throne build.
+          EOF
+
+      - name: Create isolated import branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C upstream-import
+          git add -A
+          git commit -m "Import audited Throne Android source base" || echo "No source changes"
+          git push --force-with-lease origin upstream-import
