@@ -79,6 +79,8 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                     val deviceToken = NodeMonitorClient.pairDevice(pairingCode)
                     NodeMonitorTokenStore.save(requireContext(), deviceToken)
                     nodeMonitorTokenInput.text?.clear()
+                    (nodeMonitorTokenInput.parent as? View)?.visibility = View.GONE
+                    pairButton.visibility = View.GONE
                     nodeMonitorStatus.text = "设备配对成功，访问凭证已加密保存在本机"
                     refreshNodeMonitorPending()
                 } catch (e: Exception) {
@@ -94,6 +96,8 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         importNodeMonitorTxt.setOnClickListener { confirmNodeMonitorImport("txt") }
         importNodeMonitorYaml.setOnClickListener { confirmNodeMonitorImport("yaml") }
         if (NodeMonitorTokenStore.load(requireContext()) != null) {
+            (nodeMonitorTokenInput.parent as? View)?.visibility = View.GONE
+            view.findViewById<MaterialButton>(R.id.save_node_monitor_token).visibility = View.GONE
             nodeMonitorStatus.text = "设备已配对，正在检查前天节点…"
             refreshNodeMonitorPending()
         }
