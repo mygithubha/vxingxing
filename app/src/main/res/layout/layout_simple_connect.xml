@@ -1,59 +1,448 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="#F5F6FA">
-<include layout="@layout/layout_appbar" android:layout_width="match_parent" android:layout_height="wrap_content"/>
-<ScrollView android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true" android:padding="20dp">
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
-<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="节点订阅" android:textSize="22sp" android:textStyle="bold"/>
-<com.google.android.material.textfield.TextInputLayout android:id="@+id/subscription_input_layout" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:hint="粘贴订阅链接">
-<com.google.android.material.textfield.TextInputEditText android:id="@+id/subscription_url" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textUri" android:maxLines="2"/>
-</com.google.android.material.textfield.TextInputLayout>
-<com.google.android.material.button.MaterialButton android:id="@+id/import_subscription" android:layout_width="match_parent" android:layout_height="54dp" android:layout_marginTop="10dp" android:text="导入订阅"/>
-<com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" app:cardCornerRadius="22dp" app:cardElevation="0dp" app:strokeColor="#E9ECF2" app:strokeWidth="1dp">
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="18dp">
-<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="连接控制" android:textSize="20sp" android:textStyle="bold"/>
-<TextView android:id="@+id/connection_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="等待导入订阅"/>
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:gravity="center_vertical" android:orientation="horizontal">
-<TextView android:id="@+id/current_node_status" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="当前节点：尚未连接" android:textSize="13sp" android:maxLines="2"/>
-<TextView android:id="@+id/node_health_status" android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingStart="10dp" android:paddingEnd="10dp" android:paddingTop="6dp" android:paddingBottom="6dp" android:text="未连接" android:textStyle="bold" android:textSize="12sp"/>
-</LinearLayout>
-<TextView android:id="@+id/selected_node_summary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:padding="14dp" android:background="#F1F3F8" android:text="自动模式：优先复用上次成功节点" android:textColor="#273247" android:textSize="13sp"/>
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="horizontal">
-<com.google.android.material.button.MaterialButton android:id="@+id/select_node" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:text="手动选择节点" app:cornerRadius="14dp" app:backgroundTint="#E8EEFF" android:textColor="#3157B7"/>
-<com.google.android.material.button.MaterialButton android:id="@+id/automatic_mode" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:layout_marginStart="8dp" android:text="切回自动模式" app:cornerRadius="14dp" app:backgroundTint="#F0F1F5" android:textColor="#344054"/>
-</LinearLayout>
-<com.google.android.material.button.MaterialButton android:id="@+id/connect_best_node" android:layout_width="match_parent" android:layout_height="58dp" android:layout_marginTop="14dp" android:text="测速并连接最佳节点"/>
-<CheckBox android:id="@+id/remember_last_node" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="记住上次连接的节点（勾选启用，取消勾选关闭）" android:textSize="13sp"/>
-</LinearLayout>
-</com.google.android.material.card.MaterialCardView>
-<com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" app:cardCornerRadius="22dp" app:cardElevation="0dp" app:strokeColor="#E9ECF2" app:strokeWidth="1dp">
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="18dp">
-<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="每日节点监控" android:textSize="18sp" android:textStyle="bold"/>
-<TextView android:id="@+id/node_monitor_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="首次配对后自动查询每日采集结果"/>
-<com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:hint="首次配对码（仅首次使用）">
-<com.google.android.material.textfield.TextInputEditText android:id="@+id/node_monitor_token" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textPassword" android:maxLines="1"/>
-</com.google.android.material.textfield.TextInputLayout>
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
-<com.google.android.material.button.MaterialButton android:id="@+id/save_node_monitor_token" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:text="首次配对并启用"/>
-<com.google.android.material.button.MaterialButton android:id="@+id/refresh_node_monitor" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:layout_marginStart="8dp" android:text="刷新采集结果"/>
-</LinearLayout>
-<TextView android:id="@+id/node_monitor_details" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="尚无待导入节点" android:textSize="13sp"/>
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
-<com.google.android.material.button.MaterialButton android:id="@+id/import_node_monitor_txt" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:enabled="false" android:text="导入 TXT"/>
-<com.google.android.material.button.MaterialButton android:id="@+id/import_node_monitor_yaml" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:layout_marginStart="8dp" android:enabled="false" android:text="导入 YAML"/>
-</LinearLayout>
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="首次配对后设备凭证会加密保存在本机。订阅地址保存在云端私有存储；只有你确认导入时才会发送给 App，不会自动覆盖当前配置。" android:textSize="11sp"/>
-</LinearLayout>
-</com.google.android.material.card.MaterialCardView>
-<com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" app:cardCornerRadius="22dp" app:cardElevation="0dp" app:strokeColor="#E9ECF2" app:strokeWidth="1dp">
-<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:padding="18dp">
-<LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-<TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="应用分流" android:textSize="18sp" android:textStyle="bold"/>
-<TextView android:id="@+id/proxy_apps_summary" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="5dp" android:text="默认全部直连"/>
-</LinearLayout>
-<com.google.android.material.button.MaterialButton android:id="@+id/select_apps" android:layout_width="wrap_content" android:layout_height="48dp" android:text="选择应用"/>
-</LinearLayout>
-</com.google.android.material.card.MaterialCardView>
-<TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:text="未勾选的应用始终直连。敏感应用请勿勾选。" android:textSize="12sp"/>
-</LinearLayout>
-</ScrollView>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="?android:attr/colorBackground">
+
+    <include layout="@layout/layout_appbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:paddingStart="18dp"
+        android:paddingEnd="18dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="28dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PRIVATE NETWORK"
+                android:textColor="?attr/colorPrimary"
+                android:textSize="11sp"
+                android:letterSpacing="0.12"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:text="Auto Connect"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="29sp"
+                android:fontFamily="sans"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="安全、稳定，并由你掌控每一次连接"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="13sp" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                app:cardBackgroundColor="?attr/colorSurface"
+                app:cardCornerRadius="26dp"
+                app:cardElevation="0dp"
+                app:strokeColor="?attr/colorOutline"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="连接状态"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/node_health_status"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:paddingStart="10dp"
+                            android:paddingEnd="10dp"
+                            android:paddingTop="5dp"
+                            android:paddingBottom="5dp"
+                            android:text="未连接"
+                            android:textColor="?attr/colorPrimary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/connection_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="13dp"
+                        android:text="等待导入订阅"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="23sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/current_node_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:maxLines="2"
+                        android:text="当前节点：尚未连接"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:id="@+id/selected_node_summary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="17dp"
+                        android:background="?attr/colorSurfaceVariant"
+                        android:padding="14dp"
+                        android:text="自动模式：优先复用上次成功节点"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="13sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/connect_best_node"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:layout_marginTop="16dp"
+                        android:text="连接"
+                        android:textAllCaps="false"
+                        android:textSize="16sp"
+                        app:cornerRadius="18dp" />
+
+                    <CheckBox
+                        android:id="@+id/remember_last_node"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:buttonTint="?attr/colorPrimary"
+                        android:text="记住上次成功连接的节点"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="13sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                app:cardBackgroundColor="?attr/colorSurface"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="0dp"
+                app:strokeColor="?attr/colorOutline"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="18dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="连接模式"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="17sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="自动模式保持稳定 IP；手动模式由你指定节点"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="12sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="14dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/select_node"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_weight="1"
+                            android:text="选择节点"
+                            android:textAllCaps="false"
+                            app:cornerRadius="14dp"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/automatic_mode"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_marginStart="9dp"
+                            android:layout_weight="1"
+                            android:text="自动连接"
+                            android:textAllCaps="false"
+                            app:cornerRadius="14dp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                app:cardBackgroundColor="?attr/colorSurface"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="0dp"
+                app:strokeColor="?attr/colorOutline"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="18dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="订阅管理"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="17sp"
+                        android:textStyle="bold" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/subscription_input_layout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:hint="粘贴订阅链接">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/subscription_url"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textUri"
+                            android:maxLines="2" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/import_subscription"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="8dp"
+                        android:text="导入订阅"
+                        android:textAllCaps="false"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        app:cornerRadius="14dp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                app:cardBackgroundColor="?attr/colorSurface"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="0dp"
+                app:strokeColor="?attr/colorOutline"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="18dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="每日节点监控"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="17sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/node_monitor_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="首次配对后自动查询每日采集结果"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="13sp" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:hint="首次配对码（仅首次使用）">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/node_monitor_token"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textPassword"
+                            android:maxLines="1" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/save_node_monitor_token"
+                            android:layout_width="0dp"
+                            android:layout_height="46dp"
+                            android:layout_weight="1"
+                            android:text="首次配对并启用"
+                            android:textAllCaps="false"
+                            app:cornerRadius="13dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/refresh_node_monitor"
+                            android:layout_width="0dp"
+                            android:layout_height="46dp"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:text="刷新采集结果"
+                            android:textAllCaps="false"
+                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                            app:cornerRadius="13dp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/node_monitor_details"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="尚无待导入节点"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="13sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/import_node_monitor_txt"
+                            android:layout_width="0dp"
+                            android:layout_height="46dp"
+                            android:layout_weight="1"
+                            android:enabled="false"
+                            android:text="导入 TXT"
+                            android:textAllCaps="false"
+                            app:cornerRadius="13dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/import_node_monitor_yaml"
+                            android:layout_width="0dp"
+                            android:layout_height="46dp"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:enabled="false"
+                            android:text="导入 YAML"
+                            android:textAllCaps="false"
+                            app:cornerRadius="13dp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="设备凭证加密保存在本机。订阅地址仅在你确认导入时获取，不会自动覆盖当前配置。"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="11sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                app:cardBackgroundColor="?attr/colorSurface"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="0dp"
+                app:strokeColor="?attr/colorOutline"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="18dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="应用分流"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textSize="17sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/proxy_apps_summary"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="5dp"
+                            android:text="默认全部直连"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/select_apps"
+                        android:layout_width="wrap_content"
+                        android:layout_height="46dp"
+                        android:text="管理"
+                        android:textAllCaps="false"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        app:cornerRadius="13dp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:text="未勾选的应用始终直连。银行及其他敏感应用请勿加入代理名单。"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </ScrollView>
 </LinearLayout>

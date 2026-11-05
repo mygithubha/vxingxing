@@ -189,7 +189,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                                 checked?.testCountry?.uppercase()?.let { it !in setOf("CN", "HK", "MO", "TW") } == true
                         }
                     }
-                    if (manualMode && !preferredHealthy) {
+                    if (manualMode && (preferredId <= 0L || !preferredHealthy)) {
                         manualRejected = true
                         return@launch
                     }
@@ -201,14 +201,30 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                                 .map { it.trim() }.filter { it.isNotEmpty() }.toMutableSet()
                             excludedCountries.forEach { countryFilters.add("!$it") }
                             selector.countryFilter = countryFilters.joinToString(",")
-                            if (preferredHealthy) {
-                                // The core gets a fresh result for this one preferred member. Keep it first in the
-                                // persisted pool; the normal failover members remain available behind it.
-                                selector.pinnedID = preferredId
-                                selector.pool = (listOf(preferredId) + selector.pool.filterNot { it == preferredId }).toMutableList()
-                            } else {
-                                // The previous member failed: return to the complete automatic candidate pool.
-                                selector.pinnedID = -1L
+                            when {
+                                manualMode -> {
+                                    // Manual mode is a hard lock: the core receives exactly one candidate.
+                                    // A failed probe is rejected above; it must never silently fall back.
+                                    selector.pinnedID = preferredId
+                                    selector.pool = mutableListOf(preferredId)
+                                    selector.poolRankedAt = System.currentTimeMillis() / 1000
+                                }
+                                preferredHealthy -> {
+                                    // Keep the remembered member first while retaining the full automatic pool.
+                                    selector.pinnedID = preferredId
+                                    selector.pool = (listOf(preferredId) +
+                                        selector.pool.filterNot { it == preferredId }).toMutableList()
+                                }
+                                else -> {
+                                    // Restore every eligible subscription member before automatic ranking.
+                                    selector.pinnedID = -1L
+                                    selector.pool = selector.gids.distinct()
+                                        .flatMap { ProfileManager.members(it) }
+                                        .filter { it.type != "autoselector" &&
+                                            it.testCountry?.uppercase() !in excludedCountries }
+                                        .map { it.id }.distinct().toMutableList()
+                                    selector.poolRankedAt = 0L
+                                }
                             }
                             AutoSelectorProfiles.save(selectorId, selector)
                         }
@@ -385,11 +401,13 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                 profile.latency < 0 -> "不可用"
                 else -> "未测速"
             }
-            "${profile.displayName()}\n$ip · $country · $latency"
+            "${profile.displayName()}\n$ip   ·   $country   ·   $latency"
         }.toTypedArray()
+        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, labels)
         AlertDialog.Builder(requireContext())
-            .setTitle("选择连接节点")
-            .setAdapter(ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, labels)) { dialog, which ->
+            .setTitle("选择节点")
+            .setMessage("选择后将严格连接该节点；不可用时不会自动切换。")
+            .setAdapter(adapter) { dialog, which ->
                 val selected = members[which]
                 requireContext().getSharedPreferences("simple_auto_connect", 0).edit()
                     .putBoolean("manual_mode", true)
