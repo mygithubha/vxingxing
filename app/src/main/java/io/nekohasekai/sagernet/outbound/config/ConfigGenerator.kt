@@ -764,7 +764,8 @@ class ConfigGenerator @JvmOverloads constructor(
             // The core still demotes failed/cooling members and fails over when the incumbent is no longer healthy.
             "tolerance" to Int.MAX_VALUE,
             "expected" to selector.expected,
-            "dial_retries" to selector.dialRetries,
+            // Do not retry another exit on a single failed destination dial; core health probes confirm failure.
+            "dial_retries" to -1,
             "interrupt_exist_connections" to selector.interruptOnSwitch,
         )
         if (warm.isNotEmpty()) group["warm"] = warm
