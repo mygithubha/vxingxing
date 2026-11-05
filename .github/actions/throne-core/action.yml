@@ -58,7 +58,7 @@ runs:
       run: |
         set -euo pipefail
         set +o pipefail
-        yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
+        yes | timeout 120s "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
         yes | timeout 600s "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358"
         set -o pipefail
         echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
