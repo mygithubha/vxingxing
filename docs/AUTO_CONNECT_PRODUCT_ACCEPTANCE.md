@@ -43,6 +43,7 @@ App name: Auto Connect.
 ## Node sources and health
 
 - Keep source refresh, health checks, and runtime connection as independent lifecycles.
+- While connected, preserve both the immutable runtime snapshot and the stored rows/configuration for every active selector candidate; changed source data is staged as a new profile until the active runtime is no longer using the old one.
 - Fetch and parse sources defensively; deduplicate; validate supported formats and impose input size/time limits.
 - On source/network/parse failure, retain the previous known-good cache.
 - Cache IP, egress country, test timestamp, latency, and health status; do not repeat fresh checks unnecessarily.
