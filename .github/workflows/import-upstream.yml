@@ -39,7 +39,8 @@ jobs:
 
       - name: Import source while preserving product metadata
         run: |
-          rsync -a --delete --exclude='.git' /tmp/throne-upstream/ ./
+          # Keep this product repository's own CI workflows. Import upstream source and assets only.
+          rsync -a --delete --exclude='.git' --exclude='.github/workflows/***' /tmp/throne-upstream/ ./
           mkdir -p docs/upstream
           cp /tmp/throne-upstream/README.md docs/upstream/README.md
           cp /tmp/upstream-commit.txt docs/upstream/UPSTREAM_COMMIT
