@@ -24,6 +24,14 @@ object AutoSelectorProfiles {
 
     const val TYPE = "autoselector"
 
+    private val geoExcludedCountries = setOf("CN", "HK", "MO", "TW")
+
+    private fun hasGeoExclusions(selector: AutoSelector): Boolean =
+        selector.countryFilter.split(',').any { token ->
+            val value = token.trim()
+            value.startsWith("!") && value.substring(1).trim().uppercase() in geoExcludedCountries
+        }
+
     /** Held by every :bg writer that loads a selector, changes it and saves it whole, so none undoes another's change. */
     val writes = Mutex()
 
@@ -95,6 +103,23 @@ object AutoSelectorProfiles {
         onMeasuring: suspend (Int) -> Unit = {},
         startEarly: (suspend () -> Unit)? = null,
     ): Boolean {
+        // A geo-restricted selector must know each candidate's egress country before planning its pool.
+        // URL tests do not populate IP/country fields, so run a dedicated IP sweep for unknown members first.
+        val unknownGeoIds = withContext(Dispatchers.IO) {
+            val selector = load(id) ?: return@withContext null
+            if (!hasGeoExclusions(selector)) return@withContext emptyList()
+            val store = SettingsMapper.selectorStore()
+            selector.gids.distinct()
+                .flatMap { store.group(it)?.members.orEmpty() }
+                .filter { it.testCountry.isBlank() }
+                .map { it.id }
+                .distinct()
+        } ?: return false
+        if (unknownGeoIds.isNotEmpty()) {
+            Logs.i("[Auto selector] Checking egress IP and country for " + unknownGeoIds.size + " unclassified profiles...")
+            TestEngine.queueIpTests(unknownGeoIds)
+        }
+
         val sweep = withContext(Dispatchers.IO) {
             val selector = load(id) ?: return@withContext null
             // Stale members do not count as working until this sweep re-measures them.
