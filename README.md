@@ -1,32 +1,38 @@
 # Auto Connect
 
-An Android proxy client focused on automatic node discovery, health checks, fast-node selection, failover, and per-app traffic isolation.
+Auto Connect is an Android proxy-client fork in active development. The current codebase is based on [Throne for Android](https://github.com/throneproj/ThroneForAndroid); upstream copyright and GPL-3.0 notices are retained.
 
-## Product goals
+## Intended product behavior
 
-- Fetch configurable public node sources and refresh them on demand or on a schedule.
+- Fetch configurable node sources, refresh them on demand or on a schedule.
 - Parse supported subscription formats and de-duplicate imported nodes.
-- Run concurrent URL-based connectivity tests; rank only nodes that pass the usability check.
-- Connect to the best eligible node and re-test/switch when the active node fails.
-- Keep banking, payment, password-manager, and authenticator apps outside the proxy by default, with explicit user-controlled per-app rules.
-- Show clear connection, test, source, and protection status.
+- Test candidate nodes concurrently and rank usable nodes by reachability and latency.
+- Connect to the best eligible node and recover or fail over when a connection degrades.
+- Keep banking, payment, password-manager, and authenticator apps outside the proxy by default, with explicit per-app rules.
+- Show source freshness, test results, connection state, and protection state clearly.
 
-## Safety
+These are product requirements, **not a claim that every feature is already implemented**. The current upstream base provides the proxy engine, VPN service, profile management, connection testing, and per-app routing primitives. Auto Connect-specific startup automation, trusted defaults, and end-to-end safety verification remain in development.
 
-Public proxy nodes are untrusted third-party infrastructure. A successful latency test does not establish operator trust, confidentiality, or safety. Do not use untrusted nodes for banking, payments, account recovery, or sensitive communications.
+## Security notice
 
-Per-app bypass means the selected app is excluded from this app's VPN routing. It is not a guarantee against device compromise, other VPNs, Android system-level routing, or DNS behavior outside this app's control.
+Public proxy nodes are untrusted third-party infrastructure. A successful latency or connectivity test does not establish operator trust, confidentiality, or safety. Do not use untrusted nodes for banking, payments, account recovery, passwords, or sensitive communications.
 
-## Development base
+Per-app bypass only excludes selected apps from this app's VPN routing. It is not a guarantee against device compromise, other VPNs, Android system-level routing, or DNS behavior outside this app's control. Until the Android 15 per-app rules are implemented and verified on a physical device, **do not assume banking or other sensitive apps are protected**.
 
-The planned implementation is based on [Throne for Android](https://github.com/throneproj/ThroneForAndroid), subject to a source/license audit and preservation of all required notices and GPL-3.0 obligations. This repository is the product repository; upstream source integration is a separate first milestone.
+## Build status
 
-## Status
+- [x] Public repository and initial product/security requirements
+- [x] Audited upstream Android code imported to the `upstream-import` branch
+- [x] Launcher app label changed to Auto Connect
+- [ ] First complete Android build
+- [ ] OSS debug unit tests
+- [ ] Automatic source refresh and best-node startup flow
+- [ ] Safe per-app routing defaults and visible protection status
+- [ ] Physical-device verification on vivo Android 15 (no root)
+- [ ] Installable APK artifact and release
 
-- [x] Public project repository created
-- [x] Initial product and security requirements documented
-- [ ] Import and pin the audited Android codebase
-- [ ] Implement startup source refresh and node selection policy
-- [ ] Implement protected-app defaults and per-app rule UI
-- [ ] Add Android CI build and tests
-- [ ] Verify APK on a physical Android 15 device
+Build progress: [GitHub Actions](https://github.com/mygithubha/vxingxing/actions/workflows/android-ci.yml?query=branch%3Aupstream-import).
+
+## License
+
+This project is derived from Throne for Android and is subject to GPL-3.0. See [LICENSE](LICENSE), [AUTHORS](AUTHORS), and [AUTO_CONNECT_FORK_NOTICE.md](AUTO_CONNECT_FORK_NOTICE.md).
