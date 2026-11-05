@@ -6,6 +6,8 @@ on:
     branches: [feature/simple-auto-connect-ui]
     paths:
       - "app/**"
+      - "scripts/**"
+      - "docs/**"
       - "build.gradle.kts"
       - "settings.gradle.kts"
       - "gradle/**"
