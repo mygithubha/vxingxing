@@ -519,6 +519,7 @@ object AutoSelectorRuntime {
             run.sample = sample
             // "untested" counts as usable: it has not failed, only not been reached.
             val usable = sample.members.count { it.isUsable || it.state == AutoSelectorStatus.STATE_UNTESTED }
+            val hasHealthyMember = sample.members.any { it.isUsable }
             // A suspended core (dropped Wi-Fi) must never count as an exhausted pool, nor one paused for device idle.
             val everythingDead = usable == 0 && sample.membersProbed > 0 && !sample.suspended && !idle &&
                 sample.phase != "starting"
@@ -542,7 +543,7 @@ object AutoSelectorRuntime {
                     exhausted = true
                 }
             }
-            if (usable > 0) {
+            if (hasHealthyMember) {
                 rebuildBackoffS = 0
                 rebuildAttempts = 0
                 retryLimitNotified = false
