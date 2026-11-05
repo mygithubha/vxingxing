@@ -95,7 +95,14 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                                 selector.poolCap = prefs.getInt(capKey, selector.poolCap)
                                 prefs.edit().remove(buildKey).remove(capKey).apply()
                             }
+                            selector.pinnedID = -1L
                             selector.strictPinned = false
+                            val excludedCountries = setOf("CN", "HK", "MO", "TW")
+                            selector.pool = selector.gids.distinct()
+                                .flatMap { ProfileManager.members(it) }
+                                .filter { it.type != "autoselector" && it.testCountry?.uppercase() !in excludedCountries }
+                                .map { it.id }.distinct().toMutableList()
+                            selector.poolRankedAt = 0L
                             AutoSelectorProfiles.save(selectorId, selector)
                         }
                     }
