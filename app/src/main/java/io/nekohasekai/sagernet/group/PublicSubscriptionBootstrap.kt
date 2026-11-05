@@ -31,7 +31,7 @@ internal object PublicSubscriptionBootstrap {
     // Public feed maintained by free-nodes/v2rayfree; the publisher reports six-hour updates.
     // The feed is untrusted input and must pass the normal subscription parser and local health checks.
     private const val DEFAULT_SOURCE_URL =
-        "https://raw.githubusercontent.com/free-nodes/v2rayfree/main/sub"
+        "https://cdn.jsdelivr.net/gh/free-nodes/v2rayfree@main/sub"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val bootstrapMutex = Mutex()
