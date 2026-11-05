@@ -4,6 +4,7 @@ import android.database.sqlite.SQLiteCantOpenDatabaseException
 import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.aidl.TrafficData
 import io.nekohasekai.sagernet.ktx.Logs
+import io.nekohasekai.sagernet.ktx.app
 import io.nekohasekai.sagernet.outbound.Outbound
 import io.nekohasekai.sagernet.outbound.types.AutoSelector
 import java.io.IOException
@@ -117,18 +118,29 @@ object ProfileManager {
      * hops, the group's landing / front proxy, auto-selector members, route outbounds), RunningUsesProfile.
      */
     fun runningProfileIds(): Set<Long> {
-        if (!DataStore.serviceState.started) return emptySet()
-        val ids = DataStore.runningProfiles.mapNotNull { it.toLongOrNull() }.toMutableSet()
-        runningProfileId().takeIf { it > 0L }?.let(ids::add)
+        val ids = if (DataStore.serviceState.started) {
+            DataStore.runningProfiles.mapNotNull { it.toLongOrNull() }.toMutableSet()
+        } else {
+            mutableSetOf()
+        }
+        if (DataStore.serviceState.started) {
+            runningProfileId().takeIf { it > 0L }?.let(ids::add)
 
-        val selectedId = DataStore.selectedProxy
-        if (selectedId > 0L) {
-            ids.add(selectedId)
-            // During selector startup the generated config may not yet have populated runningProfiles.
-            // Protect its current pool while ConfigGenerator takes the immutable runtime snapshot.
-            val selector = getProfile(selectedId)?.outbound as? AutoSelector
-            selector?.pool?.let(ids::addAll)
-            selector?.lastBuilt?.let(ids::addAll)
+            val selectedId = DataStore.selectedProxy
+            if (selectedId > 0L) {
+                ids.add(selectedId)
+                // During selector startup the generated config may not yet have populated runningProfiles.
+                // Protect its current pool while ConfigGenerator takes the immutable runtime snapshot.
+                val selector = getProfile(selectedId)?.outbound as? AutoSelector
+                selector?.pool?.let(ids::addAll)
+                selector?.lastBuilt?.let(ids::addAll)
+            }
+        }
+
+        // Preserve the explicitly chosen manual node across subscription cleanup even while disconnected.
+        val prefs = app.getSharedPreferences("simple_auto_connect", 0)
+        if (prefs.getBoolean("manual_mode", false)) {
+            prefs.getLong("manual_node_id", -1L).takeIf { it > 0L }?.let(ids::add)
         }
         return ids
     }
