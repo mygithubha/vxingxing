@@ -6,7 +6,7 @@ import os
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, Header, HTTPException, Query, Response
+from fastapi import Body, FastAPI, Header, HTTPException, Query, Response
 from vercel.blob import sync as blob
 from vercel.blob.errors import BlobNotFoundError
 
@@ -41,6 +41,19 @@ def _record(result) -> dict:
         ],
     }
 
+
+
+@app.post("/api/pair")
+def pair_device(payload: dict = Body(...), response: Response = None):
+    # Exchange a high-entropy setup code for the long-lived API credential.
+    expected = os.environ.get("PAIRING_CODE", "")
+    api_token = os.environ.get("NODE_MONITOR_API_TOKEN", "")
+    supplied = str(payload.get("pairing_code", "")).strip()
+    if not expected or not api_token or not hmac.compare_digest(supplied, expected):
+        raise HTTPException(status_code=401, detail="Pairing failed")
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return {"access_token": api_token}
 
 @app.get("/api/cron")
 def run_daily_collection(
