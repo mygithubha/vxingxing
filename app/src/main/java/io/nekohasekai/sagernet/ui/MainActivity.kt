@@ -144,6 +144,10 @@ class MainActivity : ThemedActivity(),
 
         binding.fab.setOnClickListener { toggleService() }
         binding.stats.setOnClickListener { if (DataStore.serviceState.connected) binding.stats.testConnection() }
+        // The simple home owns the primary connect action; hide the legacy floating controls.
+        binding.fab.visibility = View.GONE
+        binding.fabProgress.visibility = View.GONE
+        binding.stats.visibility = View.GONE
         binding.stats.setOnLongClickListener {
             showStatsMenu()
             true
