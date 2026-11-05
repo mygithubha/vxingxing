@@ -82,7 +82,7 @@ dial_replacement = """func TestRoutedDialFailureMovesSelectionOffAfterThreeFailu
 
     s.evaluateLocked(time.Now())
     if selected := s.selectedFor(N.NetworkTCP); selected == nil || selected.Tag() != "spare" {
-        t.Fatalf("selected = %v, want spare after confirmed failure")
+        t.Fatalf("selected = %v, want spare after confirmed failure", selected)
     }
 }
 """
