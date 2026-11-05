@@ -17,6 +17,7 @@ import io.nekohasekai.sagernet.bg.autoselector.AutoSelectorStatus
 import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.ProfileManager
 import io.nekohasekai.sagernet.database.ProxyEntity
+import io.nekohasekai.sagernet.widget.ExitIp
 import io.nekohasekai.sagernet.bg.test.TestEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -59,6 +60,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
     private lateinit var importNodeMonitorTxt: MaterialButton
     private lateinit var importNodeMonitorYaml: MaterialButton
     private var latestNodeMonitorPending: NodeMonitorPending? = null
+    private var exitIpCheckKey: String? = null
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -92,6 +94,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         nodeMonitorStatus = view.findViewById(R.id.node_monitor_status)
         nodeMonitorDetails = view.findViewById(R.id.node_monitor_details)
         nodeMonitorTokenInput = view.findViewById(R.id.node_monitor_token)
+        ExitIp.listener = { updateExitIpStatus() }
         importNodeMonitorTxt = view.findViewById(R.id.import_node_monitor_txt)
         importNodeMonitorYaml = view.findViewById(R.id.import_node_monitor_yaml)
 
@@ -307,6 +310,16 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                         .putLong("last_node_id", selectorStatus.selectedId)
                         .putString("last_node_name", selectorStatus.selectedName)
                         .apply()
+                    // Verify the active tunnel's real egress independently of the per-node preflight test.
+                    val key = "${selectorStatus.selectorId}:${selectorStatus.selectedId}"
+                    if (DataStore.serviceState.connected && exitIpCheckKey != key) {
+                        exitIpCheckKey = key
+                        status.text = "节点已连接 · 正在核验真实出口 IP…"
+                        ExitIp.refresh()
+                    }
+                } else if (selectorStatus.phase != AutoSelectorStatus.PHASE_RUNNING) {
+                    exitIpCheckKey = null
+                    if (!DataStore.serviceState.connected) ExitIp.clear()
                 }
                 updateNodeMonitor(selectorStatus)
             }
@@ -635,8 +648,30 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         }
     }
 
+    private fun updateExitIpStatus() {
+        if (!::status.isInitialized || !DataStore.serviceState.connected) return
+        val info = ExitIp.info
+        status.text = when {
+            info != null && info.ip.isNotBlank() ->
+                "已连接 · 出口 IP：${info.ip} · 地区：${info.country.ifBlank { info.countryCode }}"
+            ExitIp.refreshing -> "节点已连接 · 正在核验真实出口 IP…"
+            else -> "节点已连接 · 出口 IP 暂时无法核验（节点仍运行中）"
+        }
+    }
+
+    override fun onDestroyView() {
+        ExitIp.listener = null
+        ExitIp.clear()
+        exitIpCheckKey = null
+        super.onDestroyView()
+    }
+
     private fun refreshConnectionState() {
         if (!::status.isInitialized) return
+        if (!DataStore.serviceState.connected && !DataStore.serviceState.started) {
+            exitIpCheckKey = null
+            ExitIp.clear()
+        }
         when {
             DataStore.serviceState.connected -> {
                 status.text = "已连接 · 自动选优运行中"
