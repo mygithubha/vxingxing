@@ -104,7 +104,7 @@ internal object SubscriptionRefresh {
 
         Logs.i(">>>>>>>> " + str(R.string.subs_processing))
         for (outbound in servers) sink.add(outbound)
-        sink.finish(old)
+        sink.finish(old, working)
         Logs.i(">>>>>>>> " + str(R.string.subs_process_complete))
         val report = result.report()
         report.setImported(sink.stored())
@@ -117,12 +117,16 @@ internal object SubscriptionRefresh {
                 sink.entries.joinToString("") { "[+] ${it.display}\n" }
             }
         } else {
-            val plan = SubscriptionReconcile.reconcile(old, sink.entries, index)
+            val plan = SubscriptionReconcile.reconcile(old.filterNot { it.id in working }, sink.entries, index)
             disturbed.addAll(plan.updates)
 
             val stale = ArrayList<Long>()
             val keptWorking = ArrayList<Long>()
             for (id in plan.stale) (if (id in working) keptWorking else stale).add(id)
+            // A running/explicitly pinned profile must keep its stored configuration as well as its row:
+            // the active VPN core owns an immutable snapshot, and the next rebuild may use this cached row.
+            val oldIds = old.mapTo(HashSet()) { it.id }
+            for (id in working) if (id in oldIds && id !in keptWorking) keptWorking.add(id)
 
             val previousOrder = ProfileManager.memberIds(gid)
             val order = ArrayList(plan.order)
@@ -508,9 +512,9 @@ internal object SubscriptionRefresh {
         }
 
         /** After the last [add]: the identity pairs of [old] take their arrival's data, the other arrivals are inserted. */
-        suspend fun finish(old: List<OldEntry>) {
+        suspend fun finish(old: List<OldEntry>, protectedIds: Set<Long>) {
             if (index != null) {
-                SubscriptionReconcile.pairByIdentity(old, entries, index)
+                SubscriptionReconcile.pairByIdentity(old.filterNot { it.id in protectedIds }, entries, index)
                 val updates = ArrayList<Int>()
                 for (k in pending.indices) {
                     val position = pendingIndex[k]
