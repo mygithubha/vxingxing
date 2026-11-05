@@ -185,7 +185,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                             preferredHealthy = !checked?.ipOut.isNullOrBlank() &&
                                 !checked?.testCountry.isNullOrBlank() &&
                                 checked?.latency?.let { it > 0 || it == ProxyEntity.LATENCY_CONNECT_ONLY } == true &&
-                                checked?.testCountry?.uppercase() !in setOf("CN", "HK", "MO", "TW")
+                                checked?.testCountry?.uppercase()?.let { it !in setOf("CN", "HK", "MO", "TW") } == true
                         }
                     }
                     if (manualMode && !preferredHealthy) {
