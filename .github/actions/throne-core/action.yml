@@ -31,7 +31,7 @@ runs:
         path: |
           app/libs/ThroneCore.aar
           app/src/main/assets/schema/sing-box.json
-        key: throne-core-${{ env.THRONE_CORE_REF }}-${{ env.THRONE_CORE_SHA }}-${{ env.THRONE_CORE_SCRIPT_SHA }}-${{ hashFiles('.github/actions/throne-core/action.yml') }}
+        key: throne-core-${{ env.THRONE_CORE_REF }}-${{ env.THRONE_CORE_SHA }}-${{ env.THRONE_CORE_SCRIPT_SHA }}-${{ hashFiles('.github/actions/throne-core/action.yml', 'scripts/patch_autoselector_failure_only.py') }}
     - name: Install Golang
       if: steps.cache.outputs.cache-hit != 'true'
       uses: actions/setup-go@v7
