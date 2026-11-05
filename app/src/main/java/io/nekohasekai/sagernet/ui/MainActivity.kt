@@ -108,6 +108,8 @@ class MainActivity : ThemedActivity(),
             binding.drawerLayout.removeView(binding.navView)
         }
         navigation.setNavigationItemSelectedListener(this)
+        // The simplified build exposes only the focused connection home.
+        binding.drawerLayout.setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED)
         // NavigationView pads its header and menu itself (top/bottom); its side follows side bars and cutouts.
         ViewCompat.setOnApplyWindowInsetsListener(binding.drawerLayout) { _, insets ->
             val bars = insets.bars()
