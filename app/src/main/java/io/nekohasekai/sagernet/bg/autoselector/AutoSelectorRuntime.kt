@@ -13,6 +13,7 @@ import io.nekohasekai.sagernet.ktx.Logs
 import io.nekohasekai.sagernet.ktx.app
 import io.nekohasekai.sagernet.ktx.readableMessage
 import io.nekohasekai.sagernet.outbound.config.AutoSelectorBuild
+import io.nekohasekai.sagernet.outbound.types.AutoSelector
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -62,8 +63,11 @@ object AutoSelectorRuntime {
         val selectorName: String,
         /** Member profile id -> display name. */
         val names: Map<Long, String>,
+        /** Strict manual mode must never rebuild onto another member. */
+        val strictPinned: Boolean,
     ) {
         var monitor: Job? = null
+        var manualFailureNotified = false
 
         /** Polls at once: an action was applied or the screen came on. */
         val kick = Channel<Unit>(Channel.CONFLATED)
@@ -161,7 +165,7 @@ object AutoSelectorRuntime {
             val started = AutoSelectorProfiles.writes.withLock {
                 val selector = AutoSelectorProfiles.load(build.selectorId)
                 val selectorName = selector?.displayName().orEmpty().ifEmpty { proxy.profile.displayName() }
-                val attaching = Run(service, proxy, build, AutoSelectorCore(box, build.groupTag), selectorName, names)
+                val attaching = Run(service, proxy, build, AutoSelectorCore(box, build.groupTag), selectorName, names, (proxy.profile.outbound as? AutoSelector)?.strictPinned == true)
                 val attached = synchronized(lock) {
                     if (startedProxy !== proxy) return@synchronized false
                     run?.monitor?.cancel()
@@ -513,6 +517,7 @@ object AutoSelectorRuntime {
         val idle = run.service.data.idlePaused(run.core.box)
         var exhausted = false
         var retryLimitReached = false
+        var manualNodeFailed = false
         var persist = false
         synchronized(lock) {
             if (this.run !== run) return
@@ -523,14 +528,21 @@ object AutoSelectorRuntime {
             // A suspended core (dropped Wi-Fi) must never count as an exhausted pool, nor one paused for device idle.
             val everythingDead = usable == 0 && sample.membersProbed > 0 && !sample.suspended && !idle &&
                 sample.phase != "starting"
+
             if (!everythingDead) {
                 run.exhaustedSinceMs = 0
             } else if (run.exhaustedSinceMs == 0L) {
                 run.exhaustedSinceMs = now
             }
+
             if (run.exhaustedSinceMs != 0L && now - run.exhaustedSinceMs >= EXHAUSTED_GRACE_MS) {
                 run.exhaustedSinceMs = 0
-                if (rebuildAttempts >= MAX_REBUILD_ATTEMPTS) {
+                if (run.strictPinned) {
+                    if (!run.manualFailureNotified) {
+                        run.manualFailureNotified = true
+                        manualNodeFailed = true
+                    }
+                } else if (rebuildAttempts >= MAX_REBUILD_ATTEMPTS) {
                     if (!retryLimitNotified) {
                         retryLimitNotified = true
                         retryLimitReached = true
@@ -543,7 +555,7 @@ object AutoSelectorRuntime {
                     exhausted = true
                 }
             }
-            if (hasHealthyMember) {
+            if (hasHealthyMember && !run.strictPinned) {
                 rebuildBackoffS = 0
                 rebuildAttempts = 0
                 retryLimitNotified = false
@@ -555,6 +567,9 @@ object AutoSelectorRuntime {
         // screen coming on polls and publishes at once.
         if (run.service.data.notification?.screenOn?.value != false) publish()
         if (persist) persistHealth(run)
+        if (manualNodeFailed) {
+            post("手动选择的节点已不可用，未自动切换。请手动选择其他节点或切换自动模式。")
+        }
         if (retryLimitReached) {
             post("自动切换已尝试 5 次，仍没有可用节点；已暂停自动重建。请检查网络或手动重新检测。")
         }
