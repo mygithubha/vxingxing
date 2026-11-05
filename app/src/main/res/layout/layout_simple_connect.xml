@@ -12,6 +12,10 @@
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="18dp">
 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="自动测速与连接" android:textSize="18sp" android:textStyle="bold"/>
 <TextView android:id="@+id/connection_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="等待导入订阅"/>
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:gravity="center_vertical" android:orientation="horizontal">
+<TextView android:id="@+id/current_node_status" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="当前节点：尚未连接" android:textSize="13sp" android:maxLines="2"/>
+<TextView android:id="@+id/node_health_status" android:layout_width="wrap_content" android:layout_height="wrap_content" android:paddingStart="10dp" android:paddingEnd="10dp" android:paddingTop="6dp" android:paddingBottom="6dp" android:text="未连接" android:textStyle="bold" android:textSize="12sp"/>
+</LinearLayout>
 <com.google.android.material.button.MaterialButton android:id="@+id/connect_best_node" android:layout_width="match_parent" android:layout_height="58dp" android:layout_marginTop="14dp" android:text="测速并连接最佳节点"/>
 </LinearLayout>
 </com.google.android.material.card.MaterialCardView>
