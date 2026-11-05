@@ -560,6 +560,11 @@ class MainActivity : ThemedActivity(),
     private val firstStart = FirstStartPrompts(this)
     private val wifiFlow = WifiPermissionFlow(this)
 
+    fun refreshSimpleConnectHome() {
+        (currentMainFragment ?: supportFragmentManager.findFragmentById(R.id.fragment_holder) as? ToolbarFragment)
+            .let { (it as? SimpleConnectFragment)?.refreshUiState() }
+    }
+
     fun toggleService() {
         if (DataStore.serviceState.canStop) SagerNet.stopService() else startFromUi()
     }
