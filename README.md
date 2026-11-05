@@ -17,7 +17,7 @@ These are product requirements, **not a claim that every feature is already impl
 
 Public proxy nodes are untrusted third-party infrastructure. A successful latency or connectivity test does not establish operator trust, confidentiality, or safety. Do not use untrusted nodes for banking, payments, account recovery, passwords, or sensitive communications.
 
-Per-app bypass only excludes selected apps from this app's VPN routing. It is not a guarantee against device compromise, other VPNs, Android system-level routing, or DNS behavior outside this app's control. Until the Android 15 per-app rules are implemented and verified on a physical device, **do not assume banking or other sensitive apps are protected**.
+Per-app bypass only excludes selected apps from this app's VPN routing. It is not a guarantee against device compromise, other VPNs, Android system-level routing, or DNS behavior outside this app's control. The current development branch now defaults to proxying only explicitly selected apps; with an empty selection, Android routes only Auto Connect itself through the VPN. This reduces accidental exposure, but it is not a substitute for verifying package rules on a physical Android 15 device. Do not assume device-wide protection against other VPNs or system-level routing.
 
 ## Build status
 
@@ -27,7 +27,8 @@ Per-app bypass only excludes selected apps from this app's VPN routing. It is no
 - [ ] First complete Android build
 - [ ] OSS debug unit tests
 - [ ] Automatic source refresh and best-node startup flow
-- [ ] Safe per-app routing defaults and visible protection status
+- [x] Selected-app proxy mode defaults to allowlist; empty allowlist fails closed to Auto Connect only
+- [ ] Verify sensitive-app bypass on Android 15 and show a user-visible protection status
 - [ ] Physical-device verification on vivo Android 15 (no root)
 - [ ] Installable APK artifact and release
 
