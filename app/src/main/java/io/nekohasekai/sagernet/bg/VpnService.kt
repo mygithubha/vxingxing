@@ -164,7 +164,7 @@ class VpnService : BaseVpnService(),
         }
 
         val includePackage = options.getIncludePackage()
-        if (includePackage.hasNext()) {
+        if (includePackage.hasNext() || shouldRestrictToSelfOnly(DataStore.proxyApps, DataStore.bypass, 0)) {
             val added = includePackage.toList().count {
                 try {
                     builder.addAllowedApplication(it)
