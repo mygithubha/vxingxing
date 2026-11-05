@@ -64,6 +64,11 @@ object SubscribeFlows {
         if (batch.isNotEmpty()) importInto(activity, batch.joinToString("\n"), gid)
     }
 
+    /** Direct one-tap subscription import for the simplified Auto Connect home. */
+    fun addSubscriptionQuick(activity: FragmentActivity, url: String) {
+        subscribe(activity, url.trim(), hostOf(url.trim()), autoUpdate = true)
+    }
+
     /** "Add this subscription?" with the "Auto update" checkbox (throne://addsub, clash://install-config). */
     fun addSubscription(activity: FragmentActivity, url: String, name: String) {
         val link = url.trim()
