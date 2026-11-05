@@ -20,6 +20,8 @@ data class AutoSelectorStatus(
     val corePhase: String = "",
     val selectedId: Long = -1,
     val selectedName: String = "",
+    /** Health of the currently selected member: ok | degraded | untested | dead | cooldown. */
+    val selectedState: String = "",
     /** The member the core holds as pinned, -1 = automatic. */
     val pinnedId: Long = -1,
     /** Unix ms of the core's last switch, 0 = none. */
@@ -141,6 +143,7 @@ data class AutoSelectorStatus(
             "core_phase" to corePhase,
             "selected_id" to selectedId,
             "selected_name" to selectedName,
+            "selected_state" to selectedState,
             "pinned_id" to pinnedId,
             "last_switch_ms" to lastSwitchMs,
             "last_switch_reason" to lastSwitchReason,
@@ -194,6 +197,7 @@ data class AutoSelectorStatus(
                 corePhase = obj.string("core_phase"),
                 selectedId = if (obj.contains("selected_id")) obj.integer("selected_id") else -1,
                 selectedName = obj.string("selected_name"),
+                selectedState = obj.string("selected_state"),
                 pinnedId = if (obj.contains("pinned_id")) obj.integer("pinned_id") else -1,
                 lastSwitchMs = obj.integer("last_switch_ms"),
                 lastSwitchReason = obj.string("last_switch_reason"),
