@@ -85,18 +85,29 @@ object AutoSelectorProfiles {
     /** profile_start (mainwindow_profile_lifecycle.cpp:206-221): the plan succeeds and wants measurements first. */
     fun needsRanking(id: Long): Boolean {
         val selector = load(id) ?: return false
-        if (hasGeoExclusions(selector)) {
-            val store = SettingsMapper.selectorStore()
-            // A freshly checked pinned member is enough to start. Do not force an IP sweep of every
-            // subscription member just because unrelated nodes have no country metadata yet.
-            val candidates = if (selector.pinnedID > 0L) listOfNotNull(
-                selector.gids.distinct().asSequence().flatMap { store.group(it)?.members.orEmpty().asSequence() }
-                    .firstOrNull { it.id == selector.pinnedID }
-            ) else selector.gids.distinct().flatMap { store.group(it)?.members.orEmpty() }
-            val hasUnknownCountry = candidates.any { it.testCountry.isBlank() }
-            if (hasUnknownCountry) return true
+        val store = SettingsMapper.selectorStore()
+        if (selector.pinnedID > 0L) {
+            val pinned = selector.gids.distinct().asSequence()
+                .flatMap { store.group(it)?.members.orEmpty().asSequence() }
+                .firstOrNull { it.id == selector.pinnedID }
+            val now = System.currentTimeMillis() / 1000
+            if (pinned != null && pinned.testCountry.isNotBlank() &&
+                pinned.testCountry.uppercase() !in geoExcludedCountries &&
+                AutoSelectorPlanner.hasFreshResult(pinned, selector, now) && pinned.latency > 0
+            ) {
+                // The selected/remembered node was just checked by the UI. Reuse it and leave every
+                // other subscription member untouched for this connection attempt.
+                return false
+            }
         }
-        val plan = AutoSelectorPlanner(SettingsMapper.selectorStore()).plan(id, selector)
+        if (hasGeoExclusions(selector)) {
+            val candidates = if (selector.pinnedID > 0L) {
+                selector.gids.distinct().asSequence().flatMap { store.group(it)?.members.orEmpty().asSequence() }
+                    .filter { it.id == selector.pinnedID }.toList()
+            } else selector.gids.distinct().flatMap { store.group(it)?.members.orEmpty() }
+            if (candidates.any { it.testCountry.isBlank() }) return true
+        }
+        val plan = AutoSelectorPlanner(store).plan(id, selector)
         return plan.ok && plan.needsRanking
     }
 
@@ -116,6 +127,20 @@ object AutoSelectorProfiles {
     ): Boolean {
         // A geo-restricted selector must know each candidate's egress country before planning its pool.
         // URL tests do not populate IP/country fields, so run a dedicated IP sweep for unknown members first.
+        val pinnedHealthy = withContext(Dispatchers.IO) {
+            val selector = load(id) ?: return@withContext false
+            if (selector.pinnedID <= 0L) return@withContext false
+            val store = SettingsMapper.selectorStore()
+            val pinned = selector.gids.distinct().asSequence()
+                .flatMap { store.group(it)?.members.orEmpty().asSequence() }
+                .firstOrNull { it.id == selector.pinnedID } ?: return@withContext false
+            pinned.testCountry.isNotBlank() && pinned.testCountry.uppercase() !in geoExcludedCountries &&
+                pinned.latency > 0 && AutoSelectorPlanner.hasFreshResult(pinned, selector, System.currentTimeMillis() / 1000)
+        }
+        if (pinnedHealthy) {
+            Logs.i("[Auto selector] Reusing the freshly checked pinned profile; skipping the full subscription sweep.")
+            return false
+        }
         val unknownGeoIds = withContext(Dispatchers.IO) {
             val selector = load(id) ?: return@withContext null
             if (!hasGeoExclusions(selector)) return@withContext emptyList()
