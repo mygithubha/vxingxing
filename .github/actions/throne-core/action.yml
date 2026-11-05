@@ -67,6 +67,23 @@ runs:
         go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.13
         go install github.com/sagernet/gomobile/cmd/gobind@v0.1.13
         echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+    - name: Apply Auto Connect failure-only selector policy
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: ${{ env.THRONE_DIR }}/core
+      run: |
+        set -euo pipefail
+        go mod download github.com/sagernet/sing-box
+        SING_BOX_SOURCE="$(go list -m -f '{{.Dir}}' github.com/sagernet/sing-box)"
+        test -d "$SING_BOX_SOURCE"
+        PATCH_DIR="$RUNNER_TEMP/sing-box-auto-connect-policy"
+        rm -rf "$PATCH_DIR"
+        cp -a "$SING_BOX_SOURCE" "$PATCH_DIR"
+        chmod -R u+w "$PATCH_DIR"
+        python3 "$GITHUB_WORKSPACE/scripts/patch_autoselector_failure_only.py" "$PATCH_DIR"
+        go mod edit -replace="github.com/sagernet/sing-box=$PATCH_DIR"
+        echo "SING_BOX_PATCH_DIR=$PATCH_DIR" >> "$GITHUB_ENV"
+        (cd "$PATCH_DIR" && go test ./protocol/group)
     - name: Build ThroneCore AAR
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
