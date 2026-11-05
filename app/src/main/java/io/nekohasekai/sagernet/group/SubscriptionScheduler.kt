@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequest
+import androidx.work.OneTimeWorkRequest
 import androidx.work.WorkerParameters
 import androidx.work.multiprocess.RemoteCoroutineWorker
 import androidx.work.multiprocess.RemoteListenableWorker
@@ -40,6 +42,7 @@ object SubscriptionScheduler {
     const val MIN_INTERVAL_MINUTES = 30
 
     private const val WORK_NAME = "SubscriptionScheduler"
+    private const val INITIAL_WORK_NAME = "SubscriptionScheduler.Initial"
 
     /** The per-group updater of v11 and older, whose worker class is gone. */
     private const val LEGACY_WORK_NAME = "SubscriptionUpdater"
@@ -113,6 +116,7 @@ object SubscriptionScheduler {
                 val plan = plan(nowSeconds())
                 if (plan == null) {
                     workManager.cancelUniqueWork(WORK_NAME).await()
+                    workManager.cancelUniqueWork(INITIAL_WORK_NAME).await()
                     return@runOnDefaultDispatcher
                 }
                 val request = PeriodicWorkRequest.Builder(UpdateTask::class.java, plan.period, TimeUnit.SECONDS)
@@ -128,6 +132,25 @@ object SubscriptionScheduler {
                     )
                     .build()
                 workManager.enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request).await()
+
+                // A first-run subscription has subLastUpdate=0. Periodic WorkManager jobs are not
+                // immediate enough for the launch auto-connect flow, so enqueue one network-constrained
+                // one-shot poll whenever at least one group is due now.
+                if (plan.initialDelay == 0L) {
+                    val initial = OneTimeWorkRequest.Builder(UpdateTask::class.java)
+                        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                        .setInputData(
+                            Data.Builder()
+                                .putString(RemoteListenableWorker.ARGUMENT_PACKAGE_NAME, app.packageName)
+                                .putString(RemoteListenableWorker.ARGUMENT_CLASS_NAME, RemoteWorkerService::class.java.name)
+                                .putLong(KEY_PERIOD, plan.period)
+                                .build()
+                        )
+                        .build()
+                    workManager.enqueueUniqueWork(INITIAL_WORK_NAME, ExistingWorkPolicy.KEEP, initial).await()
+                } else {
+                    workManager.cancelUniqueWork(INITIAL_WORK_NAME).await()
+                }
             } catch (e: Throwable) {
                 Logs.w("SubscriptionScheduler: scheduling failed", e)
             }

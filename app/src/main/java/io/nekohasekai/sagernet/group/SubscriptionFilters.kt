@@ -49,12 +49,13 @@ internal object SubscriptionFilters {
 
         val profiles = members()
         val flagged = HashSet<Long>()
+        val runningIds = ProfileManager.runningProfileIds()
         val doomed = ArrayList<Long>()
         val sections = StringBuilder()
         fun claim(heading: Int, matches: (ProxyEntity) -> Boolean) {
             val names = ArrayList<String>()
             for (profile in profiles) {
-                if (profile.id in flagged || !matches(profile)) continue
+                if (profile.id in flagged || profile.id in runningIds || !matches(profile)) continue
                 flagged.add(profile.id)
                 doomed.add(profile.id)
                 names.add(profile.outbound.displayTypeAndName())
@@ -100,8 +101,9 @@ internal object SubscriptionFilters {
         if (options.removeUnavailable) {
             val doomed = ArrayList<Long>()
             val names = ArrayList<String>()
+            val runningIds = ProfileManager.runningProfileIds()
             for (profile in ProfileManager.members(group.id)) {
-                if (profile.type == SubscriptionRefresh.AUTOSELECTOR || !profile.isUnavailable()) continue
+                if (profile.type == SubscriptionRefresh.AUTOSELECTOR || profile.id in runningIds || !profile.isUnavailable()) continue
                 doomed.add(profile.id)
                 names.add(profile.outbound.displayTypeAndName())
             }

@@ -760,22 +760,21 @@ class ConfigGenerator @JvmOverloads constructor(
             "watch_interval" to "${selector.watchIntervalSec}s",
             "active_size" to selector.activeSize,
             "sampling" to selector.sampling,
-            "tolerance" to selector.toleranceMs,
+            // Failure-only policy A: never move a healthy incumbent just because a challenger is faster.
+            // The core still demotes failed/cooling members and fails over when the incumbent is no longer healthy.
+            "tolerance" to Int.MAX_VALUE,
             "expected" to selector.expected,
-            "dial_retries" to selector.dialRetries,
+            // Do not retry another exit on a single failed destination dial; core health probes confirm failure.
+            "dial_retries" to -1,
             "interrupt_exist_connections" to selector.interruptOnSwitch,
         )
         if (warm.isNotEmpty()) group["warm"] = warm
         if (pinnedTag.isNotEmpty()) group["pinned"] = pinnedTag
-        if (selector.maxRTTms > 0) group["max_rtt"] = "${selector.maxRTTms}ms"
+        // Do not emit max_rtt: a healthy but slower incumbent must remain eligible under policy A.
         // Never the latency test URL: that one is fetched through the proxy and is routinely blocked directly.
         val connectivityUrl = selector.connectivityURL.ifEmpty { settings.directTestUrl }
         if (connectivityUrl.isNotEmpty()) group["connectivity_url"] = connectivityUrl
-        if (selector.balance) {
-            group["balance"] = true
-            group["balance_mode"] = selector.balanceMode
-            group["balance_interval"] = "${selector.balanceIntervalSec}s"
-        }
+        // Policy A never rotates healthy members; omit balancing even if an imported profile had it enabled.
         state.outbounds.add(group)
         state.autoSelector = AutoSelectorBuild(
             groupTag = groupTag,

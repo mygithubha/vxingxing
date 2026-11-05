@@ -12,6 +12,7 @@ import com.google.android.material.textfield.TextInputEditText
 import androidx.lifecycle.lifecycleScope
 import io.nekohasekai.sagernet.R
 import io.nekohasekai.sagernet.bg.autoselector.AutoSelectorClient
+import io.nekohasekai.sagernet.bg.autoselector.AutoSelectorRuntime
 import io.nekohasekai.sagernet.bg.autoselector.AutoSelectorProfiles
 import io.nekohasekai.sagernet.bg.autoselector.AutoSelectorStatus
 import io.nekohasekai.sagernet.database.DataStore
@@ -20,6 +21,7 @@ import io.nekohasekai.sagernet.database.ProxyEntity
 import io.nekohasekai.sagernet.widget.ExitIp
 import io.nekohasekai.sagernet.bg.test.TestEngine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -28,6 +30,13 @@ import kotlinx.coroutines.withContext
  * Minimal entry point for manual subscription import, automatic selector start and per-app routing.
  */
 class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
+
+    companion object {
+        private const val STARTUP_NODE_WAIT_ATTEMPTS = 90
+
+        @Volatile
+        private var autoConnectAttemptedInProcess = false
+    }
 
     private val appPicker = registerForActivityResult(AppListActivity.Contract()) { packages ->
         if (packages != null) {
@@ -80,24 +89,48 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         automaticModeButton.setOnClickListener {
             val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
             val selectorId = DataStore.selectedProxy
-            prefs.edit().putBoolean("manual_mode", false).putLong("manual_node_id", -1L).apply()
-            viewLifecycleOwner.lifecycleScope.launch {
-                withContext(Dispatchers.IO) {
-                    AutoSelectorProfiles.writes.withLock {
-                        val selector = AutoSelectorProfiles.load(selectorId) ?: return@withLock
-                        val buildKey = "auto_build_limit_$selectorId"
-                        val capKey = "auto_pool_cap_$selectorId"
-                        if (prefs.contains(buildKey)) {
-                            selector.buildLimit = prefs.getInt(buildKey, selector.buildLimit)
-                            selector.poolCap = prefs.getInt(capKey, selector.poolCap)
-                            prefs.edit().remove(buildKey).remove(capKey).apply()
+            val wasRunning = DataStore.serviceState.started
+            val switchToAutomatic = {
+                prefs.edit().putBoolean("manual_mode", false).putLong("manual_node_id", -1L).apply()
+                viewLifecycleOwner.lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        AutoSelectorProfiles.writes.withLock {
+                            val selector = AutoSelectorProfiles.load(selectorId) ?: return@withLock
+                            val buildKey = "auto_build_limit_$selectorId"
+                            val capKey = "auto_pool_cap_$selectorId"
+                            if (prefs.contains(buildKey)) {
+                                selector.buildLimit = prefs.getInt(buildKey, selector.buildLimit)
+                                selector.poolCap = prefs.getInt(capKey, selector.poolCap)
+                                prefs.edit().remove(buildKey).remove(capKey).apply()
+                            }
+                            selector.pinnedID = -1L
+                            selector.strictPinned = false
+                            val excludedCountries = setOf("CN", "HK", "MO", "TW")
+                            selector.pool = selector.gids.distinct()
+                                .flatMap { ProfileManager.members(it) }
+                                .filter { it.type != "autoselector" && it.testCountry?.uppercase() !in excludedCountries }
+                                .map { it.id }.distinct().toMutableList()
+                            selector.poolRankedAt = 0L
+                            AutoSelectorProfiles.save(selectorId, selector)
                         }
-                        selector.strictPinned = false
-                        AutoSelectorProfiles.save(selectorId, selector)
+                    }
+                    refreshNodeChoiceUi()
+                    if (wasRunning) {
+                        status.text = "正在恢复自动候选池，连接将短暂重建…"
+                        AutoSelectorRuntime.refreshRun(selectorId)
                     }
                 }
             }
-            refreshNodeChoiceUi()
+            if (wasRunning) {
+                AlertDialog.Builder(requireContext())
+                    .setTitle("切换到自动模式")
+                    .setMessage("将恢复完整自动候选池并重建当前 VPN 配置，连接可能短暂中断。是否继续？")
+                    .setPositiveButton("切换并重连") { _, _ -> switchToAutomatic() }
+                    .setNegativeButton("取消", null)
+                    .show()
+            } else {
+                switchToAutomatic()
+            }
         }
         selectNodeButton.setOnClickListener { showNodePicker() }
         val connectionPrefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
@@ -305,6 +338,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                             AutoSelectorProfiles.save(selectorId, selector)
                         }
                     }
+                    AutoSelectorRuntime.resetFailoverBudget()
                     host.toggleService()
                 } catch (e: Exception) {
                     status.text = "连接准备失败：${e.message ?: "请重试"}"
@@ -342,6 +376,38 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                     if (!DataStore.serviceState.connected) ExitIp.clear()
                 }
                 updateNodeMonitor(selectorStatus)
+            }
+        }
+
+        // On a fresh app process, wait for the first public subscription import before auto-connecting.
+        // The process-level guard prevents reconnecting just because the user returns to this screen.
+        if (!autoConnectAttemptedInProcess) {
+            autoConnectAttemptedInProcess = true
+            viewLifecycleOwner.lifecycleScope.launch {
+                repeat(STARTUP_NODE_WAIT_ATTEMPTS) {
+                    if (!isAdded || DataStore.serviceState.started) return@launch
+                    val selectorId = DataStore.selectedProxy
+                    val count = if (selectorId > 0L) withContext(Dispatchers.IO) {
+                        val selector = AutoSelectorProfiles.load(selectorId)
+                        selector?.gids?.distinct()
+                            ?.sumOf { gid -> ProfileManager.members(gid).count { profile ->
+                                profile.type != "autoselector" && profile.testCountry?.uppercase() !in setOf("CN", "HK", "MO", "TW")
+                            } }
+                            ?: 0
+                    } else 0
+                    if (count > 0) {
+                        delay(1200)
+                        if (isAdded && !DataStore.serviceState.started) {
+                            status.text = "已获取节点，正在自动检测并连接…"
+                            connectButton.performClick()
+                        }
+                        return@launch
+                    }
+                    delay(2000)
+                }
+                if (isAdded && !DataStore.serviceState.started) {
+                    status.text = "暂未获取到节点；订阅将在后台继续更新，你也可以手动重试"
+                }
             }
         }
     }
@@ -474,8 +540,9 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
             return
         }
         selectNodeButton.isEnabled = false
-        status.text = "正在检测节点出口 IP、国家和连通性…"
+        status.text = "正在读取本地节点缓存…"
         viewLifecycleOwner.lifecycleScope.launch {
+            var displayedProfiles = mutableListOf<ProxyEntity>()
             try {
                 val candidateIds = withContext(Dispatchers.IO) {
                     val selector = AutoSelectorProfiles.load(selectorId)
@@ -491,79 +558,103 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                     return@launch
                 }
 
-                // The queue methods are suspending and return only after their results have been persisted.
-                val unknownGeoIds = withContext(Dispatchers.IO) {
-                    candidateIds.filter { id ->
-                        val profile = ProfileManager.getProfile(id)
-                        profile?.ipOut.isNullOrBlank() || profile?.testCountry.isNullOrBlank()
-                    }
+                // Render cached data first. Opening the picker must never wait for a full health sweep.
+                displayedProfiles = withContext(Dispatchers.IO) {
+                    candidateIds.mapNotNull { ProfileManager.getProfile(it) }.toMutableList()
                 }
+                if (displayedProfiles.isEmpty()) {
+                    status.text = "当前订阅组没有可读取的节点"
+                    return@launch
+                }
+
+                fun label(profile: ProxyEntity): String {
+                    val country = profile.testCountry?.trim()?.uppercase().orEmpty()
+                    val ip = profile.ipOut?.takeIf { it.isNotBlank() } ?: "IP 待核验"
+                    val region = when {
+                        country.isBlank() -> "地区待核验"
+                        country in setOf("CN", "HK", "MO", "TW") -> "已过滤：$country"
+                        else -> country
+                    }
+                    val latency = when {
+                        profile.latency > 0 -> "${profile.latency} ms"
+                        profile.latency == ProxyEntity.LATENCY_CONNECT_ONLY -> "已连通"
+                        else -> "延迟待检测"
+                    }
+                    return "${profile.displayName()} · $ip · $region · $latency"
+                }
+
+                val adapter = ArrayAdapter(
+                    requireContext(),
+                    android.R.layout.simple_list_item_1,
+                    displayedProfiles.map(::label).toMutableList()
+                )
+                AlertDialog.Builder(requireContext())
+                    .setTitle("选择节点（本地缓存）")
+                    .setMessage("列表立即显示缓存。未知地区的节点核验完成前不可选择；打开列表不会执行全量连通性测速。")
+                    .setAdapter(adapter) { _, which ->
+                        val selected = displayedProfiles.getOrNull(which) ?: return@setAdapter
+                        val country = selected.testCountry?.trim()?.uppercase().orEmpty()
+                        when {
+                            selected.ipOut.isNullOrBlank() || country.isBlank() -> {
+                                status.text = "该节点地区尚未核验，暂不能选择"
+                            }
+                            country in setOf("CN", "HK", "MO", "TW") -> {
+                                status.text = "该节点属于过滤地区（$country），不能选择"
+                            }
+                            else -> {
+                                AlertDialog.Builder(requireContext())
+                                    .setTitle("确认选择节点")
+                                    .setMessage("${selected.displayName()}\n${selected.ipOut} · $country")
+                                    .setPositiveButton("确认选择") { _, _ ->
+                                        requireContext().getSharedPreferences("simple_auto_connect", 0).edit()
+                                            .putBoolean("manual_mode", true)
+                                            .putLong("manual_node_id", selected.id)
+                                            .apply()
+                                        refreshNodeChoiceUi()
+                                        AlertDialog.Builder(requireContext())
+                                            .setTitle("是否立即连接？")
+                                            .setMessage("已锁定所选节点。是否现在连接？手动模式连接失败不会自动更换节点。")
+                                            .setPositiveButton("立即连接") { _, _ ->
+                                                if (DataStore.serviceState.connected || DataStore.serviceState.started) {
+                                                    status.text = "已保存手动节点。请先断开当前连接，再点击连接按钮使用该节点。"
+                                                } else {
+                                                    connectButton.performClick()
+                                                }
+                                            }
+                                            .setNegativeButton("稍后连接", null)
+                                            .show()
+                                    }
+                                    .setNegativeButton("重新选择", null)
+                                    .show()
+                            }
+                        }
+                    }
+                    .setNegativeButton("关闭", null)
+                    .show()
+
+                selectNodeButton.isEnabled = true
+                status.text = "已从缓存加载 ${displayedProfiles.size} 个节点；正在后台补充未知地区信息"
+
+                // Only enrich unknown egress IP/country metadata. Do not run URL tests across the entire pool here.
+                val unknownGeoIds = displayedProfiles.filter {
+                    it.ipOut.isNullOrBlank() || it.testCountry.isNullOrBlank()
+                }.map { it.id }.distinct()
                 if (unknownGeoIds.isNotEmpty()) {
                     withContext(Dispatchers.IO) { TestEngine.queueIpTests(unknownGeoIds) }
-                }
-
-                val geoQualifiedIds = withContext(Dispatchers.IO) {
-                    candidateIds.filter { id ->
-                        val profile = ProfileManager.getProfile(id) ?: return@filter false
-                        val country = profile.testCountry?.trim()?.uppercase().orEmpty()
-                        !profile.ipOut.isNullOrBlank() && country.isNotBlank() &&
-                            country !in setOf("CN", "HK", "MO", "TW")
+                    val refreshed = withContext(Dispatchers.IO) {
+                        candidateIds.mapNotNull { ProfileManager.getProfile(it) }
                     }
+                    displayedProfiles.clear()
+                    displayedProfiles.addAll(refreshed)
+                    adapter.clear()
+                    adapter.addAll(refreshed.map(::label))
+                    adapter.notifyDataSetChanged()
+                    status.text = "地区核验完成；节点列表已更新。连通性将在连接时检查"
+                } else {
+                    status.text = "已显示本地缓存；连通性将在连接时检查"
                 }
-                if (geoQualifiedIds.isEmpty()) {
-                    status.text = "没有地区已确认且符合过滤规则的节点；未知地区不会放行"
-                    return@launch
-                }
-
-                withContext(Dispatchers.IO) { TestEngine.queueUrlTests(geoQualifiedIds) }
-                val usableMembers = withContext(Dispatchers.IO) {
-                    val currentSelector = AutoSelectorProfiles.load(selectorId)
-                        ?: throw IllegalStateException("订阅已变化，请重新打开节点列表")
-                    val currentGroupIds = currentSelector.gids.distinct()
-                    val currentIds = currentGroupIds.flatMap { ProfileManager.members(it) }
-                        .filter { it.type != "autoselector" }
-                        .map { it.id }
-                        .toSet()
-                    geoQualifiedIds.filter { it in currentIds }
-                        .mapNotNull { ProfileManager.getProfile(it) }
-                        .filter { profile ->
-                            val country = profile.testCountry?.trim()?.uppercase().orEmpty()
-                            !profile.ipOut.isNullOrBlank() && country.isNotBlank() &&
-                                country !in setOf("CN", "HK", "MO", "TW") &&
-                                (profile.latency > 0 || profile.latency == ProxyEntity.LATENCY_CONNECT_ONLY)
-                        }
-                }
-                if (usableMembers.isEmpty()) {
-                    status.text = "检测完成：没有可用且符合地区规则的节点"
-                    return@launch
-                }
-
-                val labels = usableMembers.map { profile ->
-                    val latency = if (profile.latency == ProxyEntity.LATENCY_CONNECT_ONLY) {
-                        "已连通"
-                    } else {
-                        "${profile.latency} ms"
-                    }
-                    "${profile.displayName()}\n${profile.ipOut}   ·   ${profile.testCountry}   ·   $latency"
-                }.toTypedArray()
-                val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, labels)
-                AlertDialog.Builder(requireContext())
-                    .setTitle("选择节点（已检测）")
-                    .setMessage("仅显示 IP/国家已确认、地区符合规则且连通性检测通过的节点。选择后严格锁定，不自动切换。")
-                    .setAdapter(adapter) { dialog, which ->
-                        val selected = usableMembers[which]
-                        requireContext().getSharedPreferences("simple_auto_connect", 0).edit()
-                            .putBoolean("manual_mode", true)
-                            .putLong("manual_node_id", selected.id)
-                            .apply()
-                        refreshNodeChoiceUi()
-                        dialog.dismiss()
-                    }
-                    .setNegativeButton("取消", null)
-                    .show()
-                status.text = "检测完成：找到 ${usableMembers.size} 个可用节点"
             } catch (e: Exception) {
-                status.text = "节点检测失败：${e.message ?: "请重试"}"
+                status.text = "节点列表加载失败：${e.message ?: "请重试"}"
             } finally {
                 selectNodeButton.isEnabled = true
             }

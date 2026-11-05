@@ -13,6 +13,7 @@ import io.nekohasekai.sagernet.ktx.Logs
 import io.nekohasekai.sagernet.ktx.app
 import io.nekohasekai.sagernet.ktx.readableMessage
 import io.nekohasekai.sagernet.outbound.config.AutoSelectorBuild
+import io.nekohasekai.sagernet.outbound.types.AutoSelector
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -48,6 +49,7 @@ object AutoSelectorRuntime {
     private const val EXHAUSTED_GRACE_MS = 20_000L
     private const val REBUILD_BACKOFF_MIN_S = 60
     private const val REBUILD_BACKOFF_MAX_S = 600
+    private const val MAX_REBUILD_ATTEMPTS = 5
     private const val SETTLE_POLL_MS = 250L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e -> Logs.w(e) })
@@ -61,8 +63,11 @@ object AutoSelectorRuntime {
         val selectorName: String,
         /** Member profile id -> display name. */
         val names: Map<Long, String>,
+        /** Strict manual mode must never rebuild onto another member. */
+        val strictPinned: Boolean,
     ) {
         var monitor: Job? = null
+        var manualFailureNotified = false
 
         /** Polls at once: an action was applied or the screen came on. */
         val kick = Channel<Unit>(Channel.CONFLATED)
@@ -94,6 +99,8 @@ object AutoSelectorRuntime {
     // Kept across builds like the desktop monitor's, so a pool that stays dead backs off 60 s -> 600 s.
     private var lastRebuildRequestMs = 0L
     private var rebuildBackoffS = 0
+    private var rebuildAttempts = 0
+    private var retryLimitNotified = false
 
     private var sentJson = AutoSelectorStatus.IDLE.toJson()
     private val updates = Channel<Pair<BaseService.Binder, String>>(Channel.CONFLATED)
@@ -158,7 +165,7 @@ object AutoSelectorRuntime {
             val started = AutoSelectorProfiles.writes.withLock {
                 val selector = AutoSelectorProfiles.load(build.selectorId)
                 val selectorName = selector?.displayName().orEmpty().ifEmpty { proxy.profile.displayName() }
-                val attaching = Run(service, proxy, build, AutoSelectorCore(box, build.groupTag), selectorName, names)
+                val attaching = Run(service, proxy, build, AutoSelectorCore(box, build.groupTag), selectorName, names, (proxy.profile.outbound as? AutoSelector)?.strictPinned == true)
                 val attached = synchronized(lock) {
                     if (startedProxy !== proxy) return@synchronized false
                     run?.monitor?.cancel()
@@ -265,6 +272,12 @@ object AutoSelectorRuntime {
     /** AutoSelectorMonitor::RequestRecheck: the core re-probes every member now. */
     fun recheck() {
         val run = current() ?: return post(R.string.autosel_notice_not_running)
+        synchronized(lock) {
+            lastRebuildRequestMs = 0L
+            rebuildBackoffS = 0
+            rebuildAttempts = 0
+            retryLimitNotified = false
+        }
         scope.launch(Dispatchers.IO) {
             try {
                 run.core.recheck()
@@ -274,6 +287,28 @@ object AutoSelectorRuntime {
             }
             post(R.string.autosel_notice_rechecking)
             run.kick.trySend(Unit)
+        }
+    }
+
+    fun resetFailoverBudget() {
+        synchronized(lock) {
+            lastRebuildRequestMs = 0L
+            rebuildBackoffS = 0
+            rebuildAttempts = 0
+            retryLimitNotified = false
+        }
+    }
+
+    fun refreshRun(selectorId: Long) {
+        val run = current() ?: return
+        if (run.build.selectorId == selectorId) {
+            synchronized(lock) {
+                lastRebuildRequestMs = 0L
+                rebuildBackoffS = 0
+                rebuildAttempts = 0
+                retryLimitNotified = false
+            }
+            rebuild(run, null)
         }
     }
 
@@ -300,27 +335,20 @@ object AutoSelectorRuntime {
     /** on_subscription_group_changed (mainwindow_autoselector.cpp:33-65). */
     private fun onGroupChanged(gid: Long, disturbed: List<Long>) {
         if (gid < 0) return
+        // P0: a subscription refresh is a data-plane-independent operation. The running ProxyInstance
+        // owns the already-generated core configuration; never rebuild or stop it because profile rows
+        // were replaced/deleted. The refreshed database is used by the next explicit connection or by
+        // failure-only recovery after the running core has actually exhausted its active members.
         scope.launch(Dispatchers.IO) {
-            val disturbedSet = disturbed.toHashSet()
             val running = current()
-            var restart = false
-            for (id in AutoSelectorProfiles.ids()) {
-                val (selector, prunedBuilt) = AutoSelectorProfiles.writes.withLock {
-                    val selector = AutoSelectorProfiles.load(id)?.takeIf { gid in it.gids } ?: return@withLock null
-                    val alive = AutoSelectorProfiles.existing(selector.pool + selector.lastBuilt)
-                    val prunedPool = selector.pool.removeAll { it !in alive }
-                    val prunedBuilt = selector.lastBuilt.removeAll { it !in alive }
-                    if (prunedPool || prunedBuilt) AutoSelectorProfiles.save(id, selector)
-                    selector to prunedBuilt
-                } ?: continue
-                if (running == null || running.build.selectorId != id) continue
-                // A replaced member keeps its id, so only the disturbed set spots it.
-                if (prunedBuilt || selector.lastBuilt.any { it in disturbedSet }) restart = true
+            if (running == null) return@launch
+            val selector = AutoSelectorProfiles.load(running.build.selectorId) ?: return@launch
+            if (gid !in selector.gids) return@launch
+            val touchedActiveMembers = disturbed.any { it in running.build.memberIds }
+            if (touchedActiveMembers) {
+                Logs.i("[Auto selector] Subscription changed an active profile; keeping the immutable running config until disconnect or a real runtime failure.")
+                post("订阅已更新；为保护当前连接，本次运行继续使用原节点配置")
             }
-            if (!restart || running == null) return@launch
-            Logs.i("[Auto selector] The subscription replaced profiles it was running on — rebuilding.")
-            post(R.string.autosel_notice_subscription)
-            withContext(Dispatchers.Main) { if (current() === running) rebuild(running, null) }
         }
     }
 
@@ -408,15 +436,11 @@ object AutoSelectorRuntime {
         val proxy = settled(service)?.takeIf { it.profile.id == selectorId }
         val built = proxy?.config?.autoSelector?.memberIds
         val changed = AutoSelectorProfiles.writes.withLock { AutoSelectorProfiles.rerankChanges(selectorId, built) }
-        if (!changed) return
-        withContext(Dispatchers.Main) {
-            val data = service.data
-            val same = data.proxy === proxy && data.state == BaseService.State.Connected && DataStore.selectedProxy == selectorId
-            // A pending restart (another profile, a rebuild) replaces this run anyway.
-            if (!same || synchronized(lock) { pending != null }) return@withContext
-            Logs.i("[Auto selector] Every profile is measured and the best ones changed — rebuilding with the full ranking.")
-            synchronized(lock) { rankedFor = selectorId }
-            service.stopRunner(true)
+        if (changed) {
+            // Policy A: a better ranking discovered after startup is for the NEXT connection only.
+            // Do not stop/rebuild the active runner merely because a faster candidate was measured.
+            Logs.i("[Auto selector] Ranking improved after startup; keeping the active node/configuration. The new ranking applies on the next connection.")
+            post("已完成后台测速；当前连接保持不变，新排序将在下次连接时使用")
         }
     }
 
@@ -501,36 +525,63 @@ object AutoSelectorRuntime {
         val now = System.currentTimeMillis()
         val idle = run.service.data.idlePaused(run.core.box)
         var exhausted = false
+        var retryLimitReached = false
+        var manualNodeFailed = false
         var persist = false
         synchronized(lock) {
             if (this.run !== run) return
             run.sample = sample
             // "untested" counts as usable: it has not failed, only not been reached.
             val usable = sample.members.count { it.isUsable || it.state == AutoSelectorStatus.STATE_UNTESTED }
+            val hasHealthyMember = sample.members.any { it.isUsable }
             // A suspended core (dropped Wi-Fi) must never count as an exhausted pool, nor one paused for device idle.
             val everythingDead = usable == 0 && sample.membersProbed > 0 && !sample.suspended && !idle &&
                 sample.phase != "starting"
+
             if (!everythingDead) {
                 run.exhaustedSinceMs = 0
             } else if (run.exhaustedSinceMs == 0L) {
                 run.exhaustedSinceMs = now
             }
+
             if (run.exhaustedSinceMs != 0L && now - run.exhaustedSinceMs >= EXHAUSTED_GRACE_MS) {
-                if (lastRebuildRequestMs == 0L || now - lastRebuildRequestMs >= rebuildBackoffS * 1000L) {
+                run.exhaustedSinceMs = 0
+                if (run.strictPinned) {
+                    if (!run.manualFailureNotified) {
+                        run.manualFailureNotified = true
+                        manualNodeFailed = true
+                    }
+                } else if (rebuildAttempts >= MAX_REBUILD_ATTEMPTS) {
+                    if (!retryLimitNotified) {
+                        retryLimitNotified = true
+                        retryLimitReached = true
+                    }
+                } else if (lastRebuildRequestMs == 0L || now - lastRebuildRequestMs >= rebuildBackoffS * 1000L) {
                     lastRebuildRequestMs = now
+                    rebuildAttempts++
                     rebuildBackoffS = if (rebuildBackoffS == 0) REBUILD_BACKOFF_MIN_S
                     else minOf(rebuildBackoffS * 2, REBUILD_BACKOFF_MAX_S)
-                    run.exhaustedSinceMs = 0
                     exhausted = true
                 }
             }
-            if (usable > 0) rebuildBackoffS = 0
+            if (hasHealthyMember && !run.strictPinned) {
+                rebuildBackoffS = 0
+                rebuildAttempts = 0
+                retryLimitNotified = false
+                lastRebuildRequestMs = 0L
+            }
             persist = now - run.lastHealthPersistMs >= HEALTH_PERSIST_MS
         }
         // Nothing shows it while the screen is off, and a frozen UI process would only pile the callbacks up; the
         // screen coming on polls and publishes at once.
         if (run.service.data.notification?.screenOn?.value != false) publish()
         if (persist) persistHealth(run)
+        if (manualNodeFailed) {
+            post("手动选择的节点已不可用，未自动切换。请手动选择其他节点或切换自动模式。")
+        }
+        if (retryLimitReached) {
+            post("自动切换已尝试 5 次，仍没有可用节点；已暂停自动重建。请检查网络或手动重新检测。")
+        }
         if (exhausted) onExhausted(run)
     }
 
