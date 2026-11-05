@@ -760,7 +760,9 @@ class ConfigGenerator @JvmOverloads constructor(
             "watch_interval" to "${selector.watchIntervalSec}s",
             "active_size" to selector.activeSize,
             "sampling" to selector.sampling,
-            "tolerance" to selector.toleranceMs,
+            // Failure-only policy A: never move a healthy incumbent just because a challenger is faster.
+            // The core still demotes failed/cooling members and fails over when the incumbent is no longer healthy.
+            "tolerance" to Int.MAX_VALUE,
             "expected" to selector.expected,
             "dial_retries" to selector.dialRetries,
             "interrupt_exist_connections" to selector.interruptOnSwitch,
