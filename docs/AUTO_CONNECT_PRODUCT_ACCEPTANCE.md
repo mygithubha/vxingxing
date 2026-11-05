@@ -26,6 +26,7 @@ App name: Auto Connect.
 3. A single latency spike or transient probe failure MUST NOT trigger a switch.
 4. Fail over only after persistent unavailability / confirmed disconnection, using a bounded failure-confirmation policy.
 5. Apply retry limits, cooldown, and temporary quarantine for failed candidates. Never loop indefinitely.
+   The current automatic rebuild budget is five attempts, with exponential cooldown from 60 seconds up to 10 minutes; after the limit, notify the user and wait for a manual recheck or a confirmed healthy member.
 6. Select only eligible nodes: successful connectivity, known egress country, and country not in CN/HK/MO/TW.
 7. If no eligible fallback exists, preserve truthful failure state and notify the user; never claim connected.
 
