@@ -86,6 +86,26 @@ object TestEngine {
         }
     }
 
+    /**
+     * Waits for a running session to finish, then tests the egress IP and country of [ids].
+     * Used by geo-restricted auto selectors before they build a country-filtered pool.
+     */
+    suspend fun queueIpTests(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        session.lock()
+        val test = TestSession(sessionIds.incrementAndGet(), TestSpec(TestSpec.KIND_IP, ids.toLongArray()), null)
+        current = test
+        try {
+            coroutineScope {
+                val job = launch(Dispatchers.IO) { test.run() }
+                test.job = job
+                job.join()
+            }
+        } finally {
+            finish(test)
+        }
+    }
+
     private fun finish(test: TestSession) {
         if (current === test) current = null
         session.unlock()
