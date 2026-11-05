@@ -48,6 +48,7 @@ object AutoSelectorRuntime {
     private const val EXHAUSTED_GRACE_MS = 20_000L
     private const val REBUILD_BACKOFF_MIN_S = 60
     private const val REBUILD_BACKOFF_MAX_S = 600
+    private const val MAX_REBUILD_ATTEMPTS = 5
     private const val SETTLE_POLL_MS = 250L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e -> Logs.w(e) })
@@ -94,6 +95,8 @@ object AutoSelectorRuntime {
     // Kept across builds like the desktop monitor's, so a pool that stays dead backs off 60 s -> 600 s.
     private var lastRebuildRequestMs = 0L
     private var rebuildBackoffS = 0
+    private var rebuildAttempts = 0
+    private var retryLimitNotified = false
 
     private var sentJson = AutoSelectorStatus.IDLE.toJson()
     private val updates = Channel<Pair<BaseService.Binder, String>>(Channel.CONFLATED)
@@ -265,6 +268,12 @@ object AutoSelectorRuntime {
     /** AutoSelectorMonitor::RequestRecheck: the core re-probes every member now. */
     fun recheck() {
         val run = current() ?: return post(R.string.autosel_notice_not_running)
+        synchronized(lock) {
+            lastRebuildRequestMs = 0L
+            rebuildBackoffS = 0
+            rebuildAttempts = 0
+            retryLimitNotified = false
+        }
         scope.launch(Dispatchers.IO) {
             try {
                 run.core.recheck()
@@ -279,7 +288,15 @@ object AutoSelectorRuntime {
 
     fun refreshRun(selectorId: Long) {
         val run = current() ?: return
-        if (run.build.selectorId == selectorId) rebuild(run, null)
+        if (run.build.selectorId == selectorId) {
+            synchronized(lock) {
+                lastRebuildRequestMs = 0L
+                rebuildBackoffS = 0
+                rebuildAttempts = 0
+                retryLimitNotified = false
+            }
+            rebuild(run, null)
+        }
     }
 
     // ------------------------------------------------------------------------------------------------ rebuilds
@@ -495,6 +512,7 @@ object AutoSelectorRuntime {
         val now = System.currentTimeMillis()
         val idle = run.service.data.idlePaused(run.core.box)
         var exhausted = false
+        var retryLimitReached = false
         var persist = false
         synchronized(lock) {
             if (this.run !== run) return
@@ -510,21 +528,35 @@ object AutoSelectorRuntime {
                 run.exhaustedSinceMs = now
             }
             if (run.exhaustedSinceMs != 0L && now - run.exhaustedSinceMs >= EXHAUSTED_GRACE_MS) {
-                if (lastRebuildRequestMs == 0L || now - lastRebuildRequestMs >= rebuildBackoffS * 1000L) {
+                run.exhaustedSinceMs = 0
+                if (rebuildAttempts >= MAX_REBUILD_ATTEMPTS) {
+                    if (!retryLimitNotified) {
+                        retryLimitNotified = true
+                        retryLimitReached = true
+                    }
+                } else if (lastRebuildRequestMs == 0L || now - lastRebuildRequestMs >= rebuildBackoffS * 1000L) {
                     lastRebuildRequestMs = now
+                    rebuildAttempts++
                     rebuildBackoffS = if (rebuildBackoffS == 0) REBUILD_BACKOFF_MIN_S
                     else minOf(rebuildBackoffS * 2, REBUILD_BACKOFF_MAX_S)
-                    run.exhaustedSinceMs = 0
                     exhausted = true
                 }
             }
-            if (usable > 0) rebuildBackoffS = 0
+            if (usable > 0) {
+                rebuildBackoffS = 0
+                rebuildAttempts = 0
+                retryLimitNotified = false
+                lastRebuildRequestMs = 0L
+            }
             persist = now - run.lastHealthPersistMs >= HEALTH_PERSIST_MS
         }
         // Nothing shows it while the screen is off, and a frozen UI process would only pile the callbacks up; the
         // screen coming on polls and publishes at once.
         if (run.service.data.notification?.screenOn?.value != false) publish()
         if (persist) persistHealth(run)
+        if (retryLimitReached) {
+            post("自动切换已尝试 5 次，仍没有可用节点；已暂停自动重建。请检查网络或手动重新检测。")
+        }
         if (exhausted) onExhausted(run)
     }
 
