@@ -116,21 +116,24 @@ object ProfileManager {
      * The running config was built from [profileId]: the started profile, or one of the profiles it pulled in (chain
      * hops, the group's landing / front proxy, auto-selector members, route outbounds), RunningUsesProfile.
      */
-    fun runningUses(profileId: Long): Boolean {
-        if (profileId <= 0L) return false
-        val running = runningProfileId()
-        if (profileId == running || profileId.toString() in DataStore.runningProfiles) return true
-        if (!DataStore.serviceState.started) return false
+    fun runningProfileIds(): Set<Long> {
+        if (!DataStore.serviceState.started) return emptySet()
+        val ids = DataStore.runningProfiles.mapNotNull { it.toLongOrNull() }.toMutableSet()
+        runningProfileId().takeIf { it > 0L }?.let(ids::add)
 
         val selectedId = DataStore.selectedProxy
-        if (profileId == selectedId) return true
-
-        // During selector startup the generated config may not yet have populated runningProfiles.
-        // Protect the selector's current pool as well, so a concurrent subscription refresh cannot
-        // delete a member while ConfigGenerator / the core is taking its immutable runtime snapshot.
-        val selector = getProfile(selectedId)?.outbound as? AutoSelector ?: return false
-        return profileId in selector.pool || profileId in selector.lastBuilt
+        if (selectedId > 0L) {
+            ids.add(selectedId)
+            // During selector startup the generated config may not yet have populated runningProfiles.
+            // Protect its current pool while ConfigGenerator takes the immutable runtime snapshot.
+            val selector = getProfile(selectedId)?.outbound as? AutoSelector
+            selector?.pool?.let(ids::addAll)
+            selector?.lastBuilt?.let(ids::addAll)
+        }
+        return ids
     }
+
+    fun runningUses(profileId: Long): Boolean = profileId > 0L && profileId in runningProfileIds()
 
     // ------------------------------------------------------------------------------------------------ add
 
