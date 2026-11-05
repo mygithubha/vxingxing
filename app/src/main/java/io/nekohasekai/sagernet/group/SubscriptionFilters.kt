@@ -54,7 +54,7 @@ internal object SubscriptionFilters {
         fun claim(heading: Int, matches: (ProxyEntity) -> Boolean) {
             val names = ArrayList<String>()
             for (profile in profiles) {
-                if (profile.id in flagged || !matches(profile)) continue
+                if (profile.id in flagged || ProfileManager.runningUses(profile.id) || !matches(profile)) continue
                 flagged.add(profile.id)
                 doomed.add(profile.id)
                 names.add(profile.outbound.displayTypeAndName())
@@ -101,7 +101,7 @@ internal object SubscriptionFilters {
             val doomed = ArrayList<Long>()
             val names = ArrayList<String>()
             for (profile in ProfileManager.members(group.id)) {
-                if (profile.type == SubscriptionRefresh.AUTOSELECTOR || !profile.isUnavailable()) continue
+                if (profile.type == SubscriptionRefresh.AUTOSELECTOR || ProfileManager.runningUses(profile.id) || !profile.isUnavailable()) continue
                 doomed.add(profile.id)
                 names.add(profile.outbound.displayTypeAndName())
             }
