@@ -362,6 +362,8 @@ class AutoSelectorPlanner @JvmOverloads constructor(
         val unavailable = ArrayList<Long>()
         for (member in tracked.members) {
             if (member.id == selectorId) continue
+            // Manual mode is a hard constraint, not a ranking preference.
+            if (selector.strictPinned && member.id != selector.pinnedID) continue
             val group = tracked.groupOf[member.id] ?: continue
             if (plan != null) plan.membersInGroup++
             val skip = eligibilityOf(member, selector, filters, now)

@@ -246,6 +246,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                                         .putInt(capKey, selector.poolCap)
                                         .apply()
                                     selector.pinnedID = preferredId
+                                    selector.strictPinned = true
                                     selector.pool = mutableListOf(preferredId)
                                     selector.poolCap = 1
                                     selector.buildLimit = 1
@@ -261,6 +262,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                                         prefs.edit().remove(buildKey).remove(capKey).apply()
                                     }
                                     selector.pinnedID = preferredId
+                                    selector.strictPinned = false
                                     selector.pool = (listOf(preferredId) +
                                         selector.pool.filterNot { it == preferredId }).toMutableList()
                                 }
@@ -274,6 +276,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                                         prefs.edit().remove(buildKey).remove(capKey).apply()
                                     }
                                     selector.pinnedID = -1L
+                                    selector.strictPinned = false
                                     selector.pool = selector.gids.distinct()
                                         .flatMap { ProfileManager.members(it) }
                                         .filter { it.type != "autoselector" &&
