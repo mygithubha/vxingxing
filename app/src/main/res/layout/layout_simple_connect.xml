@@ -59,7 +59,7 @@
                 app:cardBackgroundColor="?attr/colorSurface"
                 app:cardCornerRadius="26dp"
                 app:cardElevation="0dp"
-                app:strokeColor="?attr/colorOutline"
+                app:strokeColor="?attr/colorControlHighlight"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
@@ -121,7 +121,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="17dp"
-                        android:background="?attr/colorSurfaceVariant"
+                        android:background="?attr/colorSurface"
                         android:padding="14dp"
                         android:text="自动模式：优先复用上次成功节点"
                         android:textColor="?attr/colorOnSurface"
@@ -156,7 +156,7 @@
                 app:cardBackgroundColor="?attr/colorSurface"
                 app:cardCornerRadius="24dp"
                 app:cardElevation="0dp"
-                app:strokeColor="?attr/colorOutline"
+                app:strokeColor="?attr/colorControlHighlight"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
@@ -217,7 +217,7 @@
                 app:cardBackgroundColor="?attr/colorSurface"
                 app:cardCornerRadius="24dp"
                 app:cardElevation="0dp"
-                app:strokeColor="?attr/colorOutline"
+                app:strokeColor="?attr/colorControlHighlight"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
@@ -268,7 +268,7 @@
                 app:cardBackgroundColor="?attr/colorSurface"
                 app:cardCornerRadius="24dp"
                 app:cardElevation="0dp"
-                app:strokeColor="?attr/colorOutline"
+                app:strokeColor="?attr/colorControlHighlight"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
@@ -389,7 +389,7 @@
                 app:cardBackgroundColor="?attr/colorSurface"
                 app:cardCornerRadius="24dp"
                 app:cardElevation="0dp"
-                app:strokeColor="?attr/colorOutline"
+                app:strokeColor="?attr/colorControlHighlight"
                 app:strokeWidth="1dp">
 
                 <LinearLayout
