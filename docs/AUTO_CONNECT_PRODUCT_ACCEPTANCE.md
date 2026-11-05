@@ -39,6 +39,8 @@ App name: Auto Connect.
 - On source/network/parse failure, retain the previous known-good cache.
 - Cache IP, egress country, test timestamp, latency, and health status; do not repeat fresh checks unnecessarily.
 - Distinguish proxy server address from the actual VPN egress IP.
+- First-run public feed: free-nodes/v2rayfree via the jsDelivr mirror; target refresh interval is six hours.
+- The feed is third-party public data, not operated or security-audited by this app; every imported node must pass local testing and country filtering.
 - Public free nodes are untrusted and have no long-term availability guarantee.
 
 ## App routing and privacy
