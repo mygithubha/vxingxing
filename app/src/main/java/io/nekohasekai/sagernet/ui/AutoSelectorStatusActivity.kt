@@ -457,7 +457,14 @@ class AutoSelectorStatusActivity : ThemedActivity(), SagerConnection.Callback {
             if (row.pinned) {
                 builder.setPositiveButton(R.string.autosel_back_to_automatic) { _, _ -> withService { it.autoSelectorSelect(-1) } }
             } else {
-                builder.setPositiveButton(R.string.autosel_use_this) { _, _ -> withService { it.autoSelectorSelect(row.id) } }
+                builder.setPositiveButton(R.string.autosel_use_this) { _, _ ->
+                    MaterialAlertDialogBuilder(this)
+                        .setTitle("确认切换节点")
+                        .setMessage("将当前连接切换到 ${row.name}，出口 IP 可能改变。是否立即切换？")
+                        .setPositiveButton("立即切换") { _, _ -> withService { it.autoSelectorSelect(row.id) } }
+                        .setNegativeButton("稍后", null)
+                        .show()
+                }
                 lines.add(getString(R.string.autosel_use_this_tip))
             }
         }
