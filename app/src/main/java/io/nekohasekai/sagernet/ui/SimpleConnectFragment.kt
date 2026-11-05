@@ -4,6 +4,7 @@ import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import androidx.lifecycle.lifecycleScope
@@ -38,6 +39,12 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
     private lateinit var appsSummary: TextView
     private lateinit var currentNode: TextView
     private lateinit var nodeHealth: TextView
+    private lateinit var nodeMonitorStatus: TextView
+    private lateinit var nodeMonitorDetails: TextView
+    private lateinit var nodeMonitorTokenInput: TextInputEditText
+    private lateinit var importNodeMonitorTxt: MaterialButton
+    private lateinit var importNodeMonitorYaml: MaterialButton
+    private var latestNodeMonitorPending: NodeMonitorPending? = null
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -52,6 +59,36 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         appsSummary = view.findViewById(R.id.proxy_apps_summary)
         currentNode = view.findViewById(R.id.current_node_status)
         nodeHealth = view.findViewById(R.id.node_health_status)
+        nodeMonitorStatus = view.findViewById(R.id.node_monitor_status)
+        nodeMonitorDetails = view.findViewById(R.id.node_monitor_details)
+        nodeMonitorTokenInput = view.findViewById(R.id.node_monitor_token)
+        importNodeMonitorTxt = view.findViewById(R.id.import_node_monitor_txt)
+        importNodeMonitorYaml = view.findViewById(R.id.import_node_monitor_yaml)
+
+        view.findViewById<MaterialButton>(R.id.save_node_monitor_token).setOnClickListener {
+            val token = nodeMonitorTokenInput.text?.toString()?.trim().orEmpty()
+            if (token.length < 32) {
+                nodeMonitorStatus.text = "访问令牌格式不正确，请重新粘贴"
+                return@setOnClickListener
+            }
+            try {
+                NodeMonitorTokenStore.save(requireContext(), token)
+                nodeMonitorTokenInput.text?.clear()
+                nodeMonitorStatus.text = "访问令牌已使用 Android Keystore 加密保存"
+                refreshNodeMonitorPending()
+            } catch (e: Exception) {
+                nodeMonitorStatus.text = "安全保存失败：${e.message ?: "请重试"}"
+            }
+        }
+        view.findViewById<MaterialButton>(R.id.refresh_node_monitor).setOnClickListener {
+            refreshNodeMonitorPending()
+        }
+        importNodeMonitorTxt.setOnClickListener { confirmNodeMonitorImport("txt") }
+        importNodeMonitorYaml.setOnClickListener { confirmNodeMonitorImport("yaml") }
+        if (NodeMonitorTokenStore.load(requireContext()) != null) {
+            nodeMonitorStatus.text = "访问令牌已安全保存，正在检查前天节点…"
+            refreshNodeMonitorPending()
+        }
 
         view.findViewById<MaterialButton>(R.id.import_subscription).setOnClickListener {
             val url = urlInput.text?.toString()?.trim().orEmpty()
@@ -130,6 +167,89 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                 updateNodeMonitor(selectorStatus)
             }
         }
+    }
+
+    private fun refreshNodeMonitorPending() {
+        val token = NodeMonitorTokenStore.load(requireContext())
+        if (token.isNullOrBlank()) {
+            nodeMonitorStatus.text = "请先粘贴并安全保存访问令牌"
+            importNodeMonitorTxt.isEnabled = false
+            importNodeMonitorYaml.isEnabled = false
+            return
+        }
+        nodeMonitorStatus.text = "正在查询云端采集结果…"
+        importNodeMonitorTxt.isEnabled = false
+        importNodeMonitorYaml.isEnabled = false
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val pending = NodeMonitorClient.fetchPending(token)
+                latestNodeMonitorPending = pending
+                val txt = pending.subscriptions.firstOrNull { it.kind == "txt" }
+                val yaml = pending.subscriptions.firstOrNull { it.kind == "yaml" }
+                nodeMonitorDetails.text = buildString {
+                    append("目标日期：").append(pending.targetDate.ifBlank { "未知" }).append("\n")
+                    append("TXT：").append(if (txt?.valid == true) "可用 · ${txt.nodeCount} 个节点" else "不可用或未提取").append("\n")
+                    append("YAML：").append(if (yaml?.valid == true) "可用 · ${yaml.nodeCount} 个节点" else "不可用或未提取")
+                    if (pending.articleTitle.isNotBlank()) {
+                        append("\n文章：").append(pending.articleTitle)
+                    }
+                }
+                nodeMonitorStatus.text = when (pending.status) {
+                    "success" -> "已采集成功 · 等待你手动确认导入"
+                    "invalid" -> "文章已找到，但订阅内容未通过有效性检测"
+                    "not_found" -> "暂未找到前天文章，没有使用其他日期替代"
+                    "protected_or_missing" -> "页面没有公开可提取的订阅地址，未尝试绕过密码"
+                    else -> "采集状态：${pending.status}"
+                }
+                importNodeMonitorTxt.isEnabled = txt?.valid == true && txt.nodeCount > 0
+                importNodeMonitorYaml.isEnabled = yaml?.valid == true && yaml.nodeCount > 0
+            } catch (e: Exception) {
+                latestNodeMonitorPending = null
+                nodeMonitorDetails.text = "暂无可导入的采集结果"
+                nodeMonitorStatus.text = "查询失败：${e.message ?: "请检查网络和访问令牌"}"
+            }
+        }
+    }
+
+    private fun confirmNodeMonitorImport(kind: String) {
+        val pending = latestNodeMonitorPending ?: run {
+            nodeMonitorStatus.text = "请先检查云端采集结果"
+            return
+        }
+        val item = pending.subscriptions.firstOrNull { it.kind == kind && it.valid && it.nodeCount > 0 }
+        if (item == null) {
+            nodeMonitorStatus.text = "该订阅未通过检测，禁止导入"
+            return
+        }
+        val typeLabel = if (kind == "txt") "TXT" else "YAML"
+        AlertDialog.Builder(requireContext())
+            .setTitle("确认导入 $typeLabel 订阅？")
+            .setMessage(
+                "文章日期：${pending.targetDate}\n" +
+                    "预计节点数：${item.nodeCount}\n\n" +
+                    "只有点击“确认导入”后，App 才会获取订阅地址并进入现有导入流程。\n" +
+                    "采集过程不会自动覆盖当前配置。"
+            )
+            .setNegativeButton("取消", null)
+            .setPositiveButton("确认导入") { _, _ ->
+                val token = NodeMonitorTokenStore.load(requireContext())
+                if (token.isNullOrBlank()) {
+                    nodeMonitorStatus.text = "访问令牌已失效，请重新保存"
+                    return@setPositiveButton
+                }
+                nodeMonitorStatus.text = "正在安全获取订阅地址…"
+                viewLifecycleOwner.lifecycleScope.launch {
+                    try {
+                        val url = NodeMonitorClient.fetchImportUrl(token, kind)
+                        // Existing import flow is invoked only after explicit confirmation.
+                        SubscribeFlows.addSubscriptionQuick(requireActivity(), url)
+                        nodeMonitorStatus.text = "$typeLabel 订阅已交给现有导入流程处理"
+                    } catch (e: Exception) {
+                        nodeMonitorStatus.text = "获取订阅失败：${e.message ?: "请重试"}"
+                    }
+                }
+            }
+            .show()
     }
 
     override fun onResume() {
