@@ -4,6 +4,7 @@ import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.GroupRepo
 import io.nekohasekai.sagernet.database.ProfileManager
 import io.nekohasekai.sagernet.database.ProxyEntity
+import io.nekohasekai.sagernet.SagerNet
 import io.nekohasekai.sagernet.ktx.Logs
 import io.nekohasekai.sagernet.ktx.app
 import io.nekohasekai.sagernet.outbound.types.AutoSelector
@@ -39,6 +40,11 @@ internal object PublicSubscriptionBootstrap {
         if (prefs.getBoolean(KEY_LEGACY_CLEANED, false)) return@withLock
 
         val oldGroups = GroupRepo.all().filter { it.url in legacyUrls }
+        val oldIds = oldGroups.mapTo(HashSet()) { it.id }
+        val selectedSelector = ProfileManager.getProfile(DataStore.selectedProxy)?.outbound as? AutoSelector
+        if (DataStore.serviceState.started && selectedSelector?.gids?.any { it in oldIds } == true) {
+            SagerNet.stopService()
+        }
         oldGroups.forEach { GroupRepo.delete(it.id) }
         val validGroupIds = GroupRepo.all().mapTo(HashSet()) { it.id }
 
