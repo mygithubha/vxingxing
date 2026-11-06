@@ -60,6 +60,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
     private lateinit var selectedNodeSummary: TextView
     private lateinit var selectNodeButton: MaterialButton
     private lateinit var automaticModeButton: MaterialButton
+    private lateinit var changeLastNodeButton: MaterialButton
     private lateinit var appsSummary: TextView
     private lateinit var currentNode: TextView
     private lateinit var nodeHealth: TextView
@@ -85,6 +86,16 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         selectedNodeSummary = view.findViewById(R.id.selected_node_summary)
         selectNodeButton = view.findViewById(R.id.select_node)
         automaticModeButton = view.findViewById(R.id.automatic_mode)
+        changeLastNodeButton = view.findViewById(R.id.change_last_node)
+        val connectionPrefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
+        rememberLastNode.isChecked = connectionPrefs.getBoolean("remember_last_node_enabled", true)
+        rememberLastNode.setOnCheckedChangeListener { _, checked ->
+            val edit = connectionPrefs.edit().putBoolean("remember_last_node_enabled", checked)
+            if (!checked) edit.putBoolean("force_change_last_node", false)
+            edit.apply()
+            refreshNodeChoiceUi()
+        }
+        changeLastNodeButton.setOnClickListener { confirmChangeLastNode() }
         refreshNodeChoiceUi()
         automaticModeButton.setOnClickListener {
             val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
@@ -133,11 +144,6 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
             }
         }
         selectNodeButton.setOnClickListener { showNodePicker() }
-        val connectionPrefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
-        // Remembering the last successful node is core behavior, not an optional optimization.
-        connectionPrefs.edit().putBoolean("remember_last_node_enabled", true).apply()
-        rememberLastNode.isChecked = true
-        rememberLastNode.isEnabled = false
         appsSummary = view.findViewById(R.id.proxy_apps_summary)
         currentNode = view.findViewById(R.id.current_node_status)
         nodeHealth = view.findViewById(R.id.node_health_status)
@@ -223,6 +229,161 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
             if (blockedPackages.isNotEmpty()) {
                 DataStore.individual = safePackages.joinToString("\n")
                 updateAppsSummary()
+                status.text = "已自动移除疑似敏感应用，保持直连：\n" + blockedPackages.joinToString("\n")
+            }
+            val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
+            connectButton.isEnabled = false
+            val manualMode = prefs.getBoolean("manual_mode", false)
+            val rememberEnabled = prefs.getBoolean("remember_last_node_enabled", true)
+            val forceChange = prefs.getBoolean("force_change_last_node", false)
+            val selectorId = DataStore.selectedProxy
+            val lastNodeId = prefs.getLong("last_node_id", -1L)
+            val preferredId = if (manualMode) prefs.getLong("manual_node_id", -1L)
+                else if (rememberEnabled && !forceChange && prefs.getLong("last_selector_id", -1L) == selectorId)
+                    lastNodeId else -1L
+            status.text = when {
+                manualMode -> "正在检查你选定的节点…"
+                forceChange -> "正在排除上次节点，按确认要求寻找新节点…"
+                preferredId > 0L -> "只核验上次成功节点，不扫描整个订阅…"
+                else -> "首次连接或记忆优先已关闭，正在自动选优…"
+            }
+            viewLifecycleOwner.lifecycleScope.launch {
+                var manualRejected = false
+                var rememberedRejected = false
+                var rememberedMissing = false
+                var preferredHealthy = false
+                try {
+                    if (manualMode) {
+                        val belongsToCurrentSubscription = withContext(Dispatchers.IO) {
+                            val currentSelector = AutoSelectorProfiles.load(selectorId) ?: return@withContext false
+                            currentSelector.gids.distinct()
+                                .flatMap { ProfileManager.members(it) }
+                                .any { it.id == preferredId && it.type != "autoselector" }
+                        }
+                        if (!belongsToCurrentSubscription) {
+                            manualRejected = true
+                            return@launch
+                        }
+                    }
+                    if (preferredId > 0L) {
+                        withContext(Dispatchers.IO) {
+                            // Only the remembered node is checked here; the full subscription is never swept.
+                            val beforeIp = ProfileManager.getProfile(preferredId)
+                            if (beforeIp == null) {
+                                rememberedMissing = true
+                                return@withContext
+                            }
+                            if (beforeIp.ipOut.isNullOrBlank() || beforeIp.testCountry.isNullOrBlank()) {
+                                TestEngine.queueIpTests(listOf(preferredId))
+                            }
+                            val afterIp = ProfileManager.getProfile(preferredId)
+                            if (!afterIp?.ipOut.isNullOrBlank() && !afterIp?.testCountry.isNullOrBlank()) {
+                                TestEngine.queueUrlTests(listOf(preferredId))
+                            }
+                            val checked = ProfileManager.getProfile(preferredId)
+                            preferredHealthy = !checked?.ipOut.isNullOrBlank() &&
+                                !checked?.testCountry.isNullOrBlank() &&
+                                checked?.latency?.let { it > 0 || it == ProxyEntity.LATENCY_CONNECT_ONLY } == true &&
+                                checked?.testCountry?.uppercase()?.let { it !in setOf("CN", "HK", "MO", "TW") } == true
+                            if (!preferredHealthy) {
+                                val state = when {
+                                    checked == null -> "missing"
+                                    checked.latency == -1 -> "failed"
+                                    else -> "unknown"
+                                }
+                                prefs.edit().putString("last_node_status", state).apply()
+                            }
+                        }
+                    }
+                    if (manualMode && (preferredId <= 0L || !preferredHealthy)) {
+                        manualRejected = true
+                        return@launch
+                    }
+                    if (rememberEnabled && !manualMode && preferredId > 0L && !preferredHealthy && !forceChange) {
+                        rememberedRejected = true
+                        return@launch
+                    }
+                    withContext(Dispatchers.IO) {
+                        AutoSelectorProfiles.writes.withLock {
+                            val selector = AutoSelectorProfiles.load(selectorId) ?: return@withLock
+                            val excludedCountries = setOf("CN", "HK", "MO", "TW")
+                            val countryFilters = selector.countryFilter.split(',')
+                                .map { it.trim() }.filter { it.isNotEmpty() }.toMutableSet()
+                            excludedCountries.forEach { countryFilters.add("!$it") }
+                            selector.countryFilter = countryFilters.joinToString(",")
+                            val buildKey = "auto_build_limit_$selectorId"
+                            val capKey = "auto_pool_cap_$selectorId"
+                            when {
+                                manualMode -> {
+                                    // Strict manual mode: exactly the user-selected member, no fallback.
+                                    if (!prefs.contains(buildKey)) prefs.edit()
+                                        .putInt(buildKey, selector.buildLimit)
+                                        .putInt(capKey, selector.poolCap)
+                                        .apply()
+                                    selector.pinnedID = preferredId
+                                    selector.strictPinned = true
+                                    selector.excludeProfileIdOnce = -1L
+                                    selector.pool = mutableListOf(preferredId)
+                                    selector.poolCap = 1
+                                    selector.buildLimit = 1
+                                    selector.poolRankedAt = System.currentTimeMillis() / 1000
+                                }
+                                rememberEnabled && preferredHealthy && !forceChange -> {
+                                    // Remembered mode is also a strict one-node lock. A failure is reported;
+                                    // it must not silently scan the full subscription or change the IP.
+                                    if (!prefs.contains(buildKey)) prefs.edit()
+                                        .putInt(buildKey, selector.buildLimit)
+                                        .putInt(capKey, selector.poolCap)
+                                        .apply()
+                                    selector.pinnedID = preferredId
+                                    selector.strictPinned = true
+                                    selector.excludeProfileIdOnce = -1L
+                                    selector.pool = mutableListOf(preferredId)
+                                    selector.poolCap = 1
+                                    selector.buildLimit = 1
+                                    selector.poolRankedAt = System.currentTimeMillis() / 1000
+                                }
+                                else -> {
+                                    // Restore full automatic mode. A confirmed change excludes only the old
+                                    // remembered profile for this selection attempt.
+                                    if (prefs.contains(buildKey)) {
+                                        selector.buildLimit = prefs.getInt(buildKey, selector.buildLimit)
+                                        selector.poolCap = prefs.getInt(capKey, selector.poolCap)
+                                        prefs.edit().remove(buildKey).remove(capKey).apply()
+                                    }
+                                    selector.pinnedID = -1L
+                                    selector.strictPinned = false
+                                    selector.excludeProfileIdOnce = if (forceChange) lastNodeId else -1L
+                                    selector.pool = selector.gids.distinct()
+                                        .flatMap { ProfileManager.members(it) }
+                                        .filter { it.type != "autoselector" &&
+                                            it.testCountry?.uppercase() !in excludedCountries }
+                                        .map { it.id }.distinct().toMutableList()
+                                    selector.poolRankedAt = 0L
+                                }
+                            }
+                            AutoSelectorProfiles.save(selectorId, selector)
+                        }
+                    }
+                    AutoSelectorRuntime.resetFailoverBudget()
+                    host.toggleService()
+                } catch (e: Exception) {
+                    status.text = "连接准备失败：${e.message ?: "请重试"}"
+                } finally {
+                    connectButton.isEnabled = true
+                    refreshConnectionState()
+                    if (manualRejected) status.text = "你选择的节点不可用或地区不符合过滤规则，请重新选择"
+                    if (rememberedRejected) {
+                        status.text = if (rememberedMissing) {
+                            "上次节点已不在当前本地订阅中，历史记录保留；不会自动换节点。请点击“改变上次连接 IP”并确认后再寻找新节点。"
+                        } else {
+                            "上次节点未通过单节点核验，历史记录保留；不会扫描整个订阅或自动换 IP。点击“改变上次连接 IP”并确认后才会寻找新节点。"
+                        }
+                    }
+                }
+            }
+        }
+        updateAppsSummary()
                 status.text = "已自动移除疑似敏感应用，保持直连：\n" + blockedPackages.joinToString("\n")
             }
             val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
@@ -355,22 +516,46 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         updateNodeMonitor(AutoSelectorClient.status.value)
         viewLifecycleOwner.lifecycleScope.launch {
             AutoSelectorClient.status.collect { selectorStatus ->
+                val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
+                val rememberedId = prefs.getLong("last_node_id", -1L)
                 if (selectorStatus.phase == AutoSelectorStatus.PHASE_RUNNING && selectorStatus.selectedId > 0L &&
+                    DataStore.serviceState.connected &&
                     (selectorStatus.selectedState == AutoSelectorStatus.STATE_OK ||
                         selectorStatus.selectedState == AutoSelectorStatus.STATE_DEGRADED)) {
-                    // Remember the node the core is actually using, including any automatic failover.
-                    requireContext().getSharedPreferences("simple_auto_connect", 0).edit()
+                    // Persist only after the VPN is actually connected to this selected member.
+                    prefs.edit()
                         .putLong("last_selector_id", selectorStatus.selectorId)
                         .putLong("last_node_id", selectorStatus.selectedId)
                         .putString("last_node_name", selectorStatus.selectedName)
+                        .putString("last_node_status", "success")
+                        .putBoolean("force_change_last_node", false)
                         .apply()
+                    refreshNodeChoiceUi()
+                    // Clear the one-shot exclusion after a new node has genuinely connected.
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        withContext(Dispatchers.IO) {
+                            AutoSelectorProfiles.writes.withLock {
+                                val selector = AutoSelectorProfiles.load(selectorStatus.selectorId)
+                                if (selector != null && selector.excludeProfileIdOnce > 0L) {
+                                    selector.excludeProfileIdOnce = -1L
+                                    AutoSelectorProfiles.save(selectorStatus.selectorId, selector)
+                                }
+                            }
+                        }
+                    }
                     // Verify the active tunnel's real egress independently of the per-node preflight test.
                     val key = "${selectorStatus.selectorId}:${selectorStatus.selectedId}"
-                    if (DataStore.serviceState.connected && exitIpCheckKey != key) {
+                    if (exitIpCheckKey != key) {
                         exitIpCheckKey = key
                         status.text = "节点已连接 · 正在核验真实出口 IP…"
                         ExitIp.refresh()
                     }
+                } else if (selectorStatus.phase == AutoSelectorStatus.PHASE_RUNNING &&
+                    selectorStatus.selectedId == rememberedId &&
+                    (selectorStatus.selectedState == AutoSelectorStatus.STATE_DEAD ||
+                        selectorStatus.selectedState == AutoSelectorStatus.STATE_COOLDOWN)) {
+                    prefs.edit().putString("last_node_status", "failed").apply()
+                    refreshNodeChoiceUi()
                 } else if (selectorStatus.phase != AutoSelectorStatus.PHASE_RUNNING) {
                     exitIpCheckKey = null
                     if (!DataStore.serviceState.connected) ExitIp.clear()
@@ -406,7 +591,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                     delay(2000)
                 }
                 if (isAdded && !DataStore.serviceState.started) {
-                    status.text = "暂未获取到节点；订阅将在后台继续更新，你也可以手动重试"
+                    status.text = "暂未获取到节点；请检查订阅链接或手动重试"
                 }
             }
         }
