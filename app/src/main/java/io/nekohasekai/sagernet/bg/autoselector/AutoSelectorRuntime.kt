@@ -131,6 +131,18 @@ object AutoSelectorRuntime {
             publish()
             return
         }
+        // This exclusion is armed only by the explicit "change remembered IP" confirmation.
+        if (DataStore.lastNodeChangePending && DataStore.lastNodeProfileId > 0L) {
+            withContext(Dispatchers.IO) {
+                AutoSelectorProfiles.writes.withLock {
+                    val selector = AutoSelectorProfiles.load(profile.id)
+                    if (selector != null) {
+                        selector.excludeProfileIdOnce = DataStore.lastNodeProfileId
+                        AutoSelectorProfiles.save(profile.id, selector)
+                    }
+                }
+            }
+        }
         if (justRanked) return
         if (!withContext(Dispatchers.IO) { runCatching { AutoSelectorProfiles.needsRanking(profile.id) }.getOrDefault(false) }) {
             return
@@ -192,6 +204,18 @@ object AutoSelectorRuntime {
         if (closed != null) {
             closed.monitor?.cancel()
             persistHealth(closed)
+        }
+        // A failed/aborted change attempt must not leave the old node permanently excluded.
+        if (proxy.profile.type == AutoSelectorProfiles.TYPE) {
+            scope.launch(Dispatchers.IO) {
+                AutoSelectorProfiles.writes.withLock {
+                    val selector = AutoSelectorProfiles.load(proxy.profile.id)
+                    if (selector != null && selector.excludeProfileIdOnce > 0L) {
+                        selector.excludeProfileIdOnce = -1L
+                        AutoSelectorProfiles.save(proxy.profile.id, selector)
+                    }
+                }
+            }
         }
         publish()
     }
@@ -538,6 +562,15 @@ object AutoSelectorRuntime {
             ) {
                 ProfileManager.getProfile(selectedId)?.let {
                     RememberedNodeStore.recordConnected(it, run.build.selectorId)
+                    scope.launch(Dispatchers.IO) {
+                        AutoSelectorProfiles.writes.withLock {
+                            val selector = AutoSelectorProfiles.load(run.build.selectorId)
+                            if (selector != null && selector.excludeProfileIdOnce > 0L) {
+                                selector.excludeProfileIdOnce = -1L
+                                AutoSelectorProfiles.save(run.build.selectorId, selector)
+                            }
+                        }
+                    }
                 }
             }
         }
