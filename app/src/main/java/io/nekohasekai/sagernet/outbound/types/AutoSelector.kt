@@ -72,6 +72,8 @@ class AutoSelector : Outbound("autoselector") {
 
     /** Hand-picked member id, -1 = automatic. */
     @JvmField var pinnedID: Long = -1
+    /** One-time exclusion used only after the user explicitly confirms changing the remembered node. */
+    @JvmField var excludeProfileIdOnce: Long = -1
     @JvmField var lastBuilt: MutableList<Long> = ArrayList()
     @JvmField var lastBuiltAt: Long = 0
 
@@ -142,6 +144,7 @@ class AutoSelector : Outbound("autoselector") {
         if (obj.contains("pool")) pool = obj.array("pool").mapTo(ArrayList()) { JsonValues.toInteger(it) }
         if (obj.contains("pool_ranked_at")) poolRankedAt = obj.double("pool_ranked_at").toLong()
         if (obj.contains("pinned_id")) pinnedID = longOr(obj["pinned_id"], -1)
+        if (obj.contains("exclude_profile_id_once")) excludeProfileIdOnce = longOr(obj["exclude_profile_id_once"], -1)
         if (obj.contains("last_built")) lastBuilt = obj.array("last_built").mapTo(ArrayList()) { JsonValues.toInteger(it) }
         if (obj.contains("last_built_at")) lastBuiltAt = obj.double("last_built_at").toLong()
         if (obj.contains("history")) history = obj.array("history").copy()
@@ -180,6 +183,7 @@ class AutoSelector : Outbound("autoselector") {
         obj["pool"] = idArray(pool)
         obj["pool_ranked_at"] = poolRankedAt
         obj["pinned_id"] = pinnedID
+        obj["exclude_profile_id_once"] = excludeProfileIdOnce
         obj["last_built"] = idArray(lastBuilt)
         obj["last_built_at"] = lastBuiltAt
         obj["history"] = history.copy()
@@ -199,6 +203,7 @@ class AutoSelector : Outbound("autoselector") {
         if (buildLimit < 1) buildLimit = 1
         if (buildLimit > MAX_BUILD_LIMIT) buildLimit = MAX_BUILD_LIMIT
         if (buildLimit > poolCap) buildLimit = poolCap
+        if (excludeProfileIdOnce < 0L) excludeProfileIdOnce = -1L
         if (resultValidityMins < 0) resultValidityMins = 0
         if (intervalSec < 10) intervalSec = 10
         if (benchIntervalSec < intervalSec) benchIntervalSec = intervalSec
