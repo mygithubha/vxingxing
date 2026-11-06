@@ -108,51 +108,20 @@ object SubscriptionScheduler {
      * Plans the periodic poll from the groups and the settings, or cancels it while nothing is updated automatically.
      * UPDATE (app start included) registers the job again whatever happened to it, and keeps the current period's start.
      */
+    /**
+     * Auto Connect uses manual subscription refresh only. Cancel any previously queued
+     * periodic or first-run work; explicit calls to SubscriptionQueue.refreshGroup remain intact.
+     */
     fun schedule() {
         runOnDefaultDispatcher {
             try {
                 val workManager = RemoteWorkManager.getInstance(app)
                 workManager.cancelUniqueWork(LEGACY_WORK_NAME).await()
-                val plan = plan(nowSeconds())
-                if (plan == null) {
-                    workManager.cancelUniqueWork(WORK_NAME).await()
-                    workManager.cancelUniqueWork(INITIAL_WORK_NAME).await()
-                    return@runOnDefaultDispatcher
-                }
-                val request = PeriodicWorkRequest.Builder(UpdateTask::class.java, plan.period, TimeUnit.SECONDS)
-                    .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                    .setInitialDelay(plan.initialDelay, TimeUnit.SECONDS)
-                    .setInputData(
-                        // The worker runs in the :bg process, where the queue lives.
-                        Data.Builder()
-                            .putString(RemoteListenableWorker.ARGUMENT_PACKAGE_NAME, app.packageName)
-                            .putString(RemoteListenableWorker.ARGUMENT_CLASS_NAME, RemoteWorkerService::class.java.name)
-                            .putLong(KEY_PERIOD, plan.period)
-                            .build()
-                    )
-                    .build()
-                workManager.enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request).await()
-
-                // A first-run subscription has subLastUpdate=0. Periodic WorkManager jobs are not
-                // immediate enough for the launch auto-connect flow, so enqueue one network-constrained
-                // one-shot poll whenever at least one group is due now.
-                if (plan.initialDelay == 0L) {
-                    val initial = OneTimeWorkRequest.Builder(UpdateTask::class.java)
-                        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                        .setInputData(
-                            Data.Builder()
-                                .putString(RemoteListenableWorker.ARGUMENT_PACKAGE_NAME, app.packageName)
-                                .putString(RemoteListenableWorker.ARGUMENT_CLASS_NAME, RemoteWorkerService::class.java.name)
-                                .putLong(KEY_PERIOD, plan.period)
-                                .build()
-                        )
-                        .build()
-                    workManager.enqueueUniqueWork(INITIAL_WORK_NAME, ExistingWorkPolicy.KEEP, initial).await()
-                } else {
-                    workManager.cancelUniqueWork(INITIAL_WORK_NAME).await()
-                }
+                workManager.cancelUniqueWork(WORK_NAME).await()
+                workManager.cancelUniqueWork(INITIAL_WORK_NAME).await()
+                Logs.i("SubscriptionScheduler: background subscription updates are disabled; manual refresh remains available.")
             } catch (e: Throwable) {
-                Logs.w("SubscriptionScheduler: scheduling failed", e)
+                Logs.w("SubscriptionScheduler: cancellation failed", e)
             }
         }
     }
