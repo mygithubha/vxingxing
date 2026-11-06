@@ -3,7 +3,7 @@ name: Auto Connect Android Build
 on:
   workflow_dispatch:
   push:
-    branches: [upstream-import, feature/simple-auto-connect-ui, 'test/apk-*', 'test/apk-*']
+    branches: [upstream-import, feature/simple-auto-connect-ui, 'test/apk-*']
     paths:
       - "app/**"
       - "build.gradle.kts"
@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: auto-connect-android-build-${{ github.ref }}-${{ github.sha }}
+  group: auto-connect-android-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
