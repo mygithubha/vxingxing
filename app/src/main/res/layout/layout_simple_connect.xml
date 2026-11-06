@@ -146,6 +146,15 @@
                         android:text="记住上次成功连接的节点"
                         android:textColor="?attr/colorOnSurface"
                         android:textSize="13sp" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/change_last_node"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="8dp"
+                        android:text="改变上次连接 IP"
+                        android:textAllCaps="false"
+                        app:cornerRadius="14dp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
