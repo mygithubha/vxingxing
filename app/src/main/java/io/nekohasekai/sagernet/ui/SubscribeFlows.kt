@@ -2,6 +2,7 @@ package io.nekohasekai.sagernet.ui
 
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.FragmentActivity
@@ -78,8 +79,9 @@ object SubscribeFlows {
         val groupName = name.trim().ifEmpty { hostOf(link) }
         val binding = LayoutRouteRemotePromptBinding.inflate(activity.layoutInflater)
         binding.message.text = activity.getString(R.string.grp_add_subscription_prompt, groupName, link)
-        binding.autoUpdate.setText(R.string.grp_auto_update)
-        binding.autoUpdate.isChecked = true
+        // Auto Connect is manual-refresh only; do not offer or enable background subscription updates.
+        binding.autoUpdate.isChecked = false
+        binding.autoUpdate.visibility = View.GONE
         MaterialAlertDialogBuilder(activity)
             .setTitle(R.string.grp_add_subscription)
             .setView(binding.root)
