@@ -523,10 +523,14 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
                     (selectorStatus.selectedState == AutoSelectorStatus.STATE_OK ||
                         selectorStatus.selectedState == AutoSelectorStatus.STATE_DEGRADED)) {
                     // Persist only after the VPN is actually connected to this selected member.
+                    val connectedProfile = ProfileManager.getProfile(selectorStatus.selectedId)
                     prefs.edit()
                         .putLong("last_selector_id", selectorStatus.selectorId)
                         .putLong("last_node_id", selectorStatus.selectedId)
                         .putString("last_node_name", selectorStatus.selectedName)
+                        .putString("last_node_address", connectedProfile?.displayAddress().orEmpty())
+                        .putString("last_node_ip", connectedProfile?.ipOut.orEmpty())
+                        .putString("last_node_country", connectedProfile?.testCountry.orEmpty())
                         .putString("last_node_status", "success")
                         .putBoolean("force_change_last_node", false)
                         .apply()
@@ -687,6 +691,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         super.onResume()
         if (view != null) {
             updateAppsSummary()
+            refreshNodeChoiceUi()
             refreshConnectionState()
         }
     }
@@ -705,17 +710,71 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         if (!::selectedNodeSummary.isInitialized) return
         val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
         val manual = prefs.getBoolean("manual_mode", false)
+        val rememberEnabled = prefs.getBoolean("remember_last_node_enabled", true)
         val id = prefs.getLong("manual_node_id", -1L)
         val profile = if (id > 0L) ProfileManager.getProfile(id) else null
-        selectedNodeSummary.text = if (manual && profile != null) {
-            "手动节点：${profile.displayName()}\nIP：${profile.ipOut ?: "待检测"} · 地区：${profile.testCountry ?: "待检测"}"
-        } else if (manual) {
-            "尚未选择节点，请从列表中选择"
+        val lastNodeId = prefs.getLong("last_node_id", -1L)
+        val lastNode = if (lastNodeId > 0L) ProfileManager.getProfile(lastNodeId) else null
+        val lastName = lastNode?.displayName()
+            ?: prefs.getString("last_node_name", null).orEmpty().ifBlank { "上次成功节点" }
+        val serverAddress = lastNode?.displayAddress()
+            ?: prefs.getString("last_node_address", null).orEmpty().ifBlank { "节点已不在当前本地订阅中" }
+        val exitIp = lastNode?.ipOut ?: prefs.getString("last_node_ip", null).orEmpty().ifBlank { "待核验" }
+        val country = lastNode?.testCountry ?: prefs.getString("last_node_country", null).orEmpty().ifBlank { "待核验" }
+        val statusLabel = when (prefs.getString("last_node_status", "unknown")) {
+            "success" -> "已验证可用（实际连接成功）"
+            "failed" -> "连接失败"
+            "missing" -> "节点已从当前订阅移除"
+            else -> "状态未知（没有新的连接结果）"
+        }
+        val lastSummary = if (lastNodeId > 0L) {
+            "\n上次节点：$lastName\n服务器地址：$serverAddress\n节点出口 IP：$exitIp · 地区：$country\n最近状态：$statusLabel"
         } else {
-            "自动模式：优先复用上次成功节点，失效后才重新选优"
+            "\n尚无成功连接记录"
+        }
+        selectedNodeSummary.text = when {
+            manual && profile != null ->
+                "手动节点：${profile.displayName()}\n服务器：${profile.displayAddress()}\n出口 IP：${profile.ipOut ?: "待检测"} · 地区：${profile.testCountry ?: "待检测"}$lastSummary"
+            manual -> "尚未选择节点，请从列表中选择$lastSummary"
+            rememberEnabled -> "自动模式：优先复用上次成功节点；记忆节点失败时不会擅自扫描全订阅$lastSummary"
+            else -> "自动模式：记忆优先已关闭，按完整候选池自动选优$lastSummary"
         }
         automaticModeButton.isEnabled = manual
         selectNodeButton.text = if (manual) "更换节点" else "手动选择节点"
+        if (::changeLastNodeButton.isInitialized) {
+            changeLastNodeButton.isEnabled = rememberEnabled && lastNodeId > 0L &&
+                prefs.getLong("last_selector_id", -1L) > 0L
+        }
+    }
+
+    private fun confirmChangeLastNode() {
+        val prefs = requireContext().getSharedPreferences("simple_auto_connect", 0)
+        val lastNodeId = prefs.getLong("last_node_id", -1L)
+        val selectorId = prefs.getLong("last_selector_id", -1L)
+        if (!rememberLastNode.isChecked || lastNodeId <= 0L || selectorId <= 0L) {
+            status.text = "还没有可更换的上次成功节点记录，请先成功连接一次自动选优节点。"
+            return
+        }
+        AlertDialog.Builder(requireContext())
+            .setTitle("改变上次连接 IP")
+            .setMessage(
+                "确认后会排除当前记忆节点，在其他候选节点中重新选优。只有新节点实际连接成功后才会更新记录；如果寻找或连接失败，原来的节点记录会保留。当前连接可能短暂中断。"
+            )
+            .setNegativeButton("取消", null)
+            .setPositiveButton("确认更换") { _, _ ->
+                prefs.edit()
+                    .putBoolean("force_change_last_node", true)
+                    .putBoolean("manual_mode", false)
+                    .putLong("manual_node_id", -1L)
+                    .apply()
+                DataStore.selectedProxy = selectorId
+                refreshNodeChoiceUi()
+                val host = activity as? MainActivity ?: return@setPositiveButton
+                host.restartWithSelectedProfile(selectorId) {
+                    if (isAdded && ::connectButton.isInitialized) connectButton.performClick()
+                }
+            }
+            .show()
     }
 
     private fun showNodePicker() {
