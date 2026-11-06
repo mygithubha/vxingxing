@@ -163,7 +163,7 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
             "节点地址：${DataStore.lastNodeAddress}\n状态：$statusText$country$missing"
         }
         rememberedNodeInfo.text = text
-        changeLastNodeButton.isEnabled = id > 0L && DataStore.lastNodeSelectorId > 0L
+        changeLastNodeButton.isEnabled = DataStore.rememberLastNodeEnabled && id > 0L && DataStore.lastNodeSelectorId > 0L
     }
 
     private fun refreshConnectionState() {
@@ -171,7 +171,11 @@ class SimpleConnectFragment : ToolbarFragment(R.layout.layout_simple_connect) {
         updateRememberedNodeSummary()
         when {
             DataStore.serviceState.connected -> {
-                status.text = "已连接 · 自动选优运行中"
+                status.text = if (DataStore.currentProfile == DataStore.lastNodeProfileId) {
+                    "已连接 · 上次成功节点"
+                } else {
+                    "已连接 · 自动选优运行中"
+                }
                 connectButton.text = "断开连接"
             }
             DataStore.serviceState.started -> {
