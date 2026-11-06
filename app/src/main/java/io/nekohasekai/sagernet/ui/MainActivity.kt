@@ -538,8 +538,14 @@ class MainActivity : ThemedActivity(),
         isAnchorViewLayoutListenerEnabled = true
     }
 
+    private var restartAfterStop = false
+
     override fun stateChanged(state: BaseService.State, profileName: String?, msg: String?) {
         changeState(state, msg, true)
+        if (state == BaseService.State.Stopped && restartAfterStop) {
+            restartAfterStop = false
+            startFromUi()
+        }
     }
 
     val connection = SagerConnection(SagerConnection.CONNECTION_ID_MAIN_ACTIVITY_FOREGROUND, true)
@@ -571,6 +577,18 @@ class MainActivity : ThemedActivity(),
 
     fun toggleService() {
         if (DataStore.serviceState.canStop) SagerNet.stopService() else startFromUi()
+    }
+
+    /** Restart on a profile chosen by an explicit user confirmation. */
+    fun restartWithSelectedProfile(profileId: Long) {
+        if (profileId <= 0L) return
+        DataStore.selectedProxy = profileId
+        if (DataStore.serviceState.started) {
+            restartAfterStop = true
+            if (DataStore.serviceState.canStop) SagerNet.stopService()
+        } else {
+            startFromUi()
+        }
     }
 
     /** Wi-Fi rules of the routing profile the selected profile starts with ask for location access once before a start from here. */
