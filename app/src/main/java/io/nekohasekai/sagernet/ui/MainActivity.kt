@@ -448,6 +448,7 @@ class MainActivity : ThemedActivity(),
     }
 
     private var errorBar: Snackbar? = null
+    private var restartAfterStop = false
     private var errorShown = ""
 
     /** A failed start stays until the next start, its action or a swipe; the service keeps it for a later visit. */
@@ -533,6 +534,10 @@ class MainActivity : ThemedActivity(),
 
     override fun stateChanged(state: BaseService.State, profileName: String?, msg: String?) {
         changeState(state, msg, true)
+        if (state == BaseService.State.Stopped && restartAfterStop) {
+            restartAfterStop = false
+            startFromUi()
+        }
     }
 
     val connection = SagerConnection(SagerConnection.CONNECTION_ID_MAIN_ACTIVITY_FOREGROUND, true)
@@ -559,6 +564,18 @@ class MainActivity : ThemedActivity(),
 
     fun toggleService() {
         if (DataStore.serviceState.canStop) SagerNet.stopService() else startFromUi()
+    }
+
+    /** Restarts the VPN on a user-confirmed profile change, including when a connection is already active. */
+    fun restartWithSelectedProfile(profileId: Long) {
+        if (profileId <= 0L) return
+        DataStore.selectedProxy = profileId
+        if (DataStore.serviceState.canStop) {
+            restartAfterStop = true
+            SagerNet.stopService()
+        } else {
+            startFromUi()
+        }
     }
 
     /** Wi-Fi rules of the routing profile the selected profile starts with ask for location access once before a start from here. */
