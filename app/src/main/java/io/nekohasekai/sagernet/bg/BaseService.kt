@@ -24,6 +24,7 @@ import io.nekohasekai.sagernet.bg.proto.exitsThroughVpn
 import io.nekohasekai.sagernet.bg.proto.urlTestCurrent
 import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.ProfileOrder
+import io.nekohasekai.sagernet.database.RememberedNodeStore
 import io.nekohasekai.sagernet.database.ProxyEntity
 import io.nekohasekai.sagernet.database.SagerDatabase
 import io.nekohasekai.sagernet.ktx.*
@@ -523,6 +524,7 @@ class BaseService {
          * without the rule-sets when [ruleSets].
          */
         fun failRunner(message: String, dnsSettings: Boolean = false, geoSettings: Boolean = false, ruleSets: Boolean = false) {
+            RememberedNodeStore.markFailure(data.proxy?.profile?.id ?: DataStore.currentProfile)
             if (data.state != State.Stopping) {
                 DataStore.serviceError = message
                 DataStore.serviceErrorDns = dnsSettings
@@ -666,6 +668,7 @@ class BaseService {
 
                     withContext(coreDispatcher) { startProcesses() }
                     data.changeState(State.Connected)
+                    if (profile.type != "autoselector") RememberedNodeStore.recordConnected(profile)
                     runCatching { watchWifiRules(proxy) }.onFailure { Logs.w(it) }
 
                     lateInit()
