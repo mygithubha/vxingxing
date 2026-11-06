@@ -40,3 +40,29 @@ class AutoSelectorManualLockTest {
         assertFalse(restored.allowsMember(99L))
     }
 }
+
+    @Test
+    fun confirmedChangeExcludesOnlyTheRememberedMemberOnce() {
+        val selector = AutoSelector()
+        selector.pinnedID = 42L
+        selector.strictPinned = false
+        selector.excludeProfileIdOnce = 42L
+
+        assertFalse(selector.allowsMember(42L))
+        assertTrue(selector.allowsMember(99L))
+    }
+
+    @Test
+    fun oneShotExclusionSurvivesSelectorPersistence() {
+        val selector = AutoSelector()
+        selector.pinnedID = 42L
+        selector.strictPinned = false
+        selector.excludeProfileIdOnce = 42L
+
+        val restored = AutoSelector()
+        assertTrue(restored.parseFromJson(selector.exportToJson()))
+        assertEquals(42L, restored.excludeProfileIdOnce)
+        assertFalse(restored.allowsMember(42L))
+        assertTrue(restored.allowsMember(99L))
+    }
+}
