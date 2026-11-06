@@ -2,6 +2,7 @@ package io.nekohasekai.sagernet.ui
 
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.FragmentActivity
@@ -66,7 +67,7 @@ object SubscribeFlows {
 
     /** Direct one-tap subscription import for the simplified Auto Connect home. */
     fun addSubscriptionQuick(activity: FragmentActivity, url: String) {
-        subscribe(activity, url.trim(), hostOf(url.trim()), autoUpdate = true)
+        subscribe(activity, url.trim(), hostOf(url.trim()), autoUpdate = false)
     }
 
     /** "Add this subscription?" with the "Auto update" checkbox (throne://addsub, clash://install-config). */
@@ -83,8 +84,8 @@ object SubscribeFlows {
         val groupName = name.trim().ifEmpty { hostOf(link) }
         val binding = LayoutRouteRemotePromptBinding.inflate(activity.layoutInflater)
         binding.message.text = activity.getString(R.string.grp_add_subscription_prompt, groupName, link)
-        binding.autoUpdate.setText(R.string.grp_auto_update)
-        binding.autoUpdate.isChecked = true
+        binding.autoUpdate.isChecked = false
+        binding.autoUpdate.visibility = View.GONE
         MaterialAlertDialogBuilder(activity)
             .setTitle(R.string.grp_add_subscription)
             .setView(binding.root)
@@ -184,7 +185,7 @@ object SubscribeFlows {
         }
         binding.newGroup.setOnClickListener {
             dialog.dismiss()
-            subscribe(activity, url, hostOf(url), true)
+            subscribe(activity, url, hostOf(url), false)
         }
         binding.httpProxy.setOnClickListener {
             dialog.dismiss()
