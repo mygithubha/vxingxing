@@ -8,6 +8,7 @@ import io.nekohasekai.sagernet.bg.ServiceNotification
 import io.nekohasekai.sagernet.bg.proto.ProxyInstance
 import io.nekohasekai.sagernet.database.DataStore
 import io.nekohasekai.sagernet.database.ProfileManager
+import io.nekohasekai.sagernet.database.RememberedNodeStore
 import io.nekohasekai.sagernet.group.SubscriptionQueue
 import io.nekohasekai.sagernet.ktx.Logs
 import io.nekohasekai.sagernet.ktx.app
@@ -526,6 +527,19 @@ object AutoSelectorRuntime {
             }
             if (usable > 0) rebuildBackoffS = 0
             persist = now - run.lastHealthPersistMs >= HEALTH_PERSIST_MS
+        }
+        // Persist only the member the running core has actually selected while the VPN is connected.
+        if (DataStore.rememberLastNodeEnabled && run.service.data.state.connected) {
+            val selectedId = run.build.members[sample.selectedTag] ?: -1L
+            if (selectedId > 0L &&
+                (selectedId != DataStore.lastNodeProfileId ||
+                    run.build.selectorId != DataStore.lastNodeSelectorId ||
+                    DataStore.lastNodeStatus != RememberedNodeStore.STATUS_SUCCESS)
+            ) {
+                ProfileManager.getProfile(selectedId)?.let {
+                    RememberedNodeStore.recordConnected(it, run.build.selectorId)
+                }
+            }
         }
         // Nothing shows it while the screen is off, and a frozen UI process would only pile the callbacks up; the
         // screen coming on polls and publishes at once.
