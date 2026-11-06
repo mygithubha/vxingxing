@@ -538,13 +538,14 @@ class MainActivity : ThemedActivity(),
         isAnchorViewLayoutListenerEnabled = true
     }
 
-    private var restartAfterStop = false
+    private var restartAfterStop: (() -> Unit)? = null
 
     override fun stateChanged(state: BaseService.State, profileName: String?, msg: String?) {
         changeState(state, msg, true)
-        if (state == BaseService.State.Stopped && restartAfterStop) {
-            restartAfterStop = false
-            startFromUi()
+        if (state == BaseService.State.Stopped) {
+            val restart = restartAfterStop
+            restartAfterStop = null
+            restart?.invoke()
         }
     }
 
@@ -579,15 +580,15 @@ class MainActivity : ThemedActivity(),
         if (DataStore.serviceState.canStop) SagerNet.stopService() else startFromUi()
     }
 
-    /** Restart on a profile chosen by an explicit user confirmation. */
-    fun restartWithSelectedProfile(profileId: Long) {
+    /** Stop the current runner and invoke the caller's confirmed start flow only after it has stopped. */
+    fun restartWithSelectedProfile(profileId: Long, afterStop: () -> Unit) {
         if (profileId <= 0L) return
         DataStore.selectedProxy = profileId
         if (DataStore.serviceState.started) {
-            restartAfterStop = true
+            restartAfterStop = afterStop
             if (DataStore.serviceState.canStop) SagerNet.stopService()
         } else {
-            startFromUi()
+            afterStop()
         }
     }
 
