@@ -3,7 +3,7 @@ name: Auto Connect Android Build
 on:
   workflow_dispatch:
   push:
-    branches: [upstream-import, feature/simple-auto-connect-ui, feature/auto-connect-stability-release, feature/remember-last-node]
+    branches: [upstream-import, feature/simple-auto-connect-ui, feature/auto-connect-stability-release, feature/remember-last-node, 'test/apk-*']
     paths:
       - "app/**"
       - "scripts/**"
