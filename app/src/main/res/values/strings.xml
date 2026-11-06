@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Auto Connect</string>
+    <string name="app_name" translatable="false">Auto Connect V1 Debug 5</string>
     <string name="app_name_long" translatable="false">Throne for Android</string>
     <string name="app_desc">The universal proxy toolchain for Android, written in Kotlin.</string>
     <string name="project">Project</string>
