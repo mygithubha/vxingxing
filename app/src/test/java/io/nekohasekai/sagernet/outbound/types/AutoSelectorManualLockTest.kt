@@ -39,7 +39,6 @@ class AutoSelectorManualLockTest {
         assertTrue(restored.strictPinned)
         assertFalse(restored.allowsMember(99L))
     }
-}
 
     @Test
     fun confirmedChangeExcludesOnlyTheRememberedMemberOnce() {
