@@ -3,7 +3,7 @@ name: Auto Connect Android Build
 on:
   workflow_dispatch:
   push:
-    branches: [upstream-import]
+    branches: [upstream-import, 'test/apk-*']
     paths:
       - "app/**"
       - "build.gradle.kts"
