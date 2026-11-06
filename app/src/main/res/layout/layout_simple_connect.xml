@@ -16,6 +16,13 @@
 </LinearLayout>
 </com.google.android.material.card.MaterialCardView>
 <com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" app:cardCornerRadius="18dp" app:cardElevation="0dp">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="18dp">
+<com.google.android.material.switchmaterial.SwitchMaterial android:id="@+id/remember_last_node_switch" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="记住上次连接 IP" android:textSize="16sp"/>
+<TextView android:id="@+id/remembered_node_info" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="还没有成功连接记录" android:textSize="13sp"/>
+<com.google.android.material.button.MaterialButton android:id="@+id/change_last_node" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="12dp" android:text="改变上次连接 IP"/>
+</LinearLayout>
+</com.google.android.material.card.MaterialCardView>
+<com.google.android.material.card.MaterialCardView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" app:cardCornerRadius="18dp" app:cardElevation="0dp">
 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:padding="18dp">
 <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="应用分流" android:textSize="18sp" android:textStyle="bold"/>
