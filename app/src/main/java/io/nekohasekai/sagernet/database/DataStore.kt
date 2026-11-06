@@ -97,6 +97,15 @@ object DataStore : OnPreferenceDataStoreChangeListener {
     var proxyApps by configurationStore.boolean(Key.PROXY_APPS) { true }
     var bypass by configurationStore.boolean(Key.BYPASS_MODE) { false }
     var individual by configurationStore.string(Key.INDIVIDUAL)
+    /** Prefer the last successfully connected node on the next start. */
+    var rememberLastNodeEnabled by configurationStore.boolean(Key.REMEMBER_LAST_NODE_ENABLED) { true }
+    var lastNodeProfileId by configurationStore.long(Key.LAST_NODE_PROFILE_ID) { 0L }
+    var lastNodeSelectorId by configurationStore.long(Key.LAST_NODE_SELECTOR_ID) { 0L }
+    var lastNodeAddress by configurationStore.string(Key.LAST_NODE_ADDRESS) { "" }
+    var lastNodeCountry by configurationStore.string(Key.LAST_NODE_COUNTRY) { "" }
+    var lastNodeStatus by configurationStore.string(Key.LAST_NODE_STATUS) { "unknown" }
+    var lastNodeAt by configurationStore.long(Key.LAST_NODE_AT) { 0L }
+    var lastNodeChangePending by configurationStore.boolean(Key.LAST_NODE_CHANGE_PENDING) { false }
     /** The VPN hands the mixed inbound to apps as the system HTTP proxy (only without inbound_auth). */
     var appendHttpProxy by configurationStore.boolean(Key.APPEND_HTTP_PROXY)
     var httpProxyBypass by configurationStore.string(Key.HTTP_PROXY_BYPASS) { "" }
