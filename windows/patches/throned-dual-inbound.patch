@@ -1,0 +1,67 @@
+diff --git a/include/database/SettingsRepo.h b/include/database/SettingsRepo.h
+--- a/include/database/SettingsRepo.h
++++ b/include/database/SettingsRepo.h
+@@
+-    int inbound_socks_port = 2080; // Mixed, actually
++    // Auto Connect: stable loopback proxy ports. The legacy setting name is
++    // retained for database compatibility; this is now the SOCKS5 listener.
++    int inbound_socks_port = 7891;
+diff --git a/src/configs/generate.cpp b/src/configs/generate.cpp
+--- a/src/configs/generate.cpp
++++ b/src/configs/generate.cpp
+@@
+ constexpr auto mixedIn = "mixed-in";
++constexpr auto httpIn = "http-in";
+@@
+     if (!settings.disable_mixed_inbound) {
+-        QJsonObject inboundObj;
+-        inboundObj["tag"] = tags::mixedIn;
+-        inboundObj["type"] = "mixed";
+-        inboundObj["listen"] = settings.inbound_address;
+-        inboundObj["listen_port"] = settings.inbound_socks_port;
+-        if (settings.inbound_auth) {
+-            inboundObj["users"] = QJsonArray{
+-                QJsonObject{
+-                    {"username", settings.inbound_user},
+-                    {"password", settings.inbound_pass}}};
+-        }
+-        inbounds += inboundObj;
++        QJsonArray users;
++        if (settings.inbound_auth) {
++            users = QJsonArray{QJsonObject{
++                {"username", settings.inbound_user},
++                {"password", settings.inbound_pass}}};
++        }
++
++        // Separate protocol listeners make browser-extension configuration
++        // deterministic: HTTP CONNECT on 7890, SOCKS5 on the configured port
++        // (7891 by default). Both remain loopback-only by default.
++        inbounds += QJsonObject{
++            {"tag", tags::mixedIn},
++            {"type", "socks"},
++            {"listen", settings.inbound_address},
++            {"listen_port", settings.inbound_socks_port},
++            {"users", users},
++        };
++        inbounds += QJsonObject{
++            {"tag", httpIn},
++            {"type", "http"},
++            {"listen", settings.inbound_address},
++            {"listen_port", 7890},
++            {"users", users},
++        };
+@@
+-                {"inbound", QJsonArray{tags::mixedIn, tags::tunIn}},
++                {"inbound", QJsonArray{tags::mixedIn, httpIn, tags::tunIn}},
+diff --git a/src/ui/setting/dialog_basic_settings.cpp b/src/ui/setting/dialog_basic_settings.cpp
+--- a/src/ui/setting/dialog_basic_settings.cpp
++++ b/src/ui/setting/dialog_basic_settings.cpp
+@@
+-    ui->inbound_socks_port_l->setText(ui->inbound_socks_port_l->text().replace("Socks", "Mixed (SOCKS+HTTP)"));
++    ui->inbound_socks_port_l->setText(tr("SOCKS5 port (default 7891)"));
+@@
+-    inboundLayout->addWidget(makeFieldRow(tr("Mixed port"), tr("SOCKS and HTTP on one local port"), ui->inbound_socks_port));
++    inboundLayout->addWidget(makeFieldRow(tr("SOCKS5 port"), tr("SOCKS5 listener; HTTP CONNECT uses 127.0.0.1:7890"), ui->inbound_socks_port));
+@@
+-    inboundLayout->addWidget(makeFieldRow(tr("Disable mixed inbound"), tr("Do not expose the local mixed proxy endpoint"), makeToggle(ui->disable_mixed_inbound)));
++    inboundLayout->addWidget(makeFieldRow(tr("Disable local proxy listeners"), tr("Disable both local HTTP and SOCKS5 endpoints"), makeToggle(ui->disable_mixed_inbound)));
