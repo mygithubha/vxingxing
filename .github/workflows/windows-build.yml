@@ -1,6 +1,12 @@
 name: Auto Connect Windows x64 build
 
 on:
+  push:
+    branches:
+      - feature/windows10-desktop-client
+    paths:
+      - "windows/**"
+      - ".github/workflows/windows-build.yml"
   workflow_dispatch:
     inputs:
       version:
