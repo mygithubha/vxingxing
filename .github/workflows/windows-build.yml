@@ -60,7 +60,7 @@ jobs:
     env:
       INPUT_VERSION: ${{ inputs.version || 'dev' }}
       DEST: ${{ github.workspace }}/windows/throned/deployment/windows-amd64
-      GITHUB_WORKSPACE: ${{ github.workspace }}
+      GITHUB_WORKSPACE: ${{ github.workspace }}/windows/throned
       LAUNCHER_ARGS: -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
     steps:
       - name: Checkout repository and pinned Throned source
@@ -111,6 +111,7 @@ jobs:
         working-directory: windows/throned/updater
         run: go test ./...
       - name: Download Qt and OpenSSL
+        working-directory: windows/throned
         shell: bash
         run: |
           curl -fLso qt.7z https://github.com/throneproj/buildqt/releases/download/Qt_6.11.2/Qt_6.11.2_x64.7z
@@ -119,8 +120,8 @@ jobs:
         working-directory: windows/throned
         shell: bash
         run: |
-          7z x qt.7z -o"$GITHUB_WORKSPACE/windows/throned/Qt"
-          7z x openssl.7z -o"$GITHUB_WORKSPACE/windows/throned/openssl"
+          7z x qt.7z -o"$PWD/Qt"
+          7z x openssl.7z -o"$PWD/openssl"
           export CMAKE_PREFIX_PATH="$PWD/Qt/lib/cmake"
           export OPENSSL_ROOT_DIR="$PWD/openssl"
           mkdir build
