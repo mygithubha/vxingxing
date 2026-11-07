@@ -66,7 +66,6 @@ jobs:
     env:
       INPUT_VERSION: ${{ inputs.version || 'dev' }}
       DEST: ${{ github.workspace }}/windows/throned/deployment/windows-amd64
-      GITHUB_WORKSPACE: ${{ github.workspace }}/windows/throned
       LAUNCHER_ARGS: -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
     steps:
       - name: Checkout repository and pinned Throned source
@@ -139,7 +138,8 @@ jobs:
           ninja
           ctest --output-on-failure --no-tests=ignore -E '_tests$'
           cd ..
-          ./script/deploy_windows.sh
+          test -f build/Throned.exe
+          GITHUB_WORKSPACE="$PWD" ./script/deploy_windows.sh
       - name: Upload portable Windows x64 build
         uses: actions/upload-artifact@v4
         with:
