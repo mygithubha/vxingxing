@@ -1,18 +1,27 @@
 diff --git a/include/database/SettingsRepo.h b/include/database/SettingsRepo.h
 --- a/include/database/SettingsRepo.h
 +++ b/include/database/SettingsRepo.h
-@@ -283,1 +283,3 @@
+@@ -280,5 +280,7 @@
+     // Socks & HTTP Inbound
+     bool disable_mixed_inbound = false;
+     QString inbound_address = "127.0.0.1";
 -    int inbound_socks_port = 2080; // Mixed, actually
-+    // Auto Connect: stable loopback proxy ports. The legacy setting name is
-+    // retained for database compatibility; this is now the SOCKS5 listener.
++    // Auto Connect: keep stable local proxy ports for browser configuration.
++    // Retain the legacy setting name for database compatibility.
 +    int inbound_socks_port = 7891;
+     // Ephemeral authenticated mixed inbound used only by Throned's own HTTP
 diff --git a/src/configs/generate.cpp b/src/configs/generate.cpp
 --- a/src/configs/generate.cpp
 +++ b/src/configs/generate.cpp
-@@ -58,1 +58,2 @@
+@@ -56,6 +56,7 @@
+ constexpr auto dnsIn = "dns-in";
+ constexpr auto dnsSystem = "dns-system";
  constexpr auto mixedIn = "mixed-in";
 +constexpr auto httpIn = "http-in";
-@@ -1449,13 +1450,25 @@
+ constexpr auto serviceIn = "throned-service-in";
+ constexpr auto tunIn = "tun-in";
+ constexpr auto xrayFullConfigIn = "throne-bridge";
+@@ -1449,15 +1450,27 @@
      if (!settings.disable_mixed_inbound) {
 -        QJsonObject inboundObj;
 -        inboundObj["tag"] = tags::mixedIn;
@@ -33,9 +42,8 @@ diff --git a/src/configs/generate.cpp b/src/configs/generate.cpp
 +                {"password", settings.inbound_pass}}};
 +        }
 +
-+        // Separate protocol listeners make browser-extension configuration
-+        // deterministic: HTTP CONNECT on 7890, SOCKS5 on the configured port
-+        // (7891 by default). Both remain loopback-only by default.
++        // Separate protocol listeners for browser extensions and local apps.
++        // HTTP CONNECT uses 7890; SOCKS5 uses 7891 by default.
 +        inbounds += QJsonObject{
 +            {"tag", tags::mixedIn},
 +            {"type", "socks"},
@@ -50,18 +58,31 @@ diff --git a/src/configs/generate.cpp b/src/configs/generate.cpp
 +            {"listen_port", 7890},
 +            {"users", users},
 +        };
-@@ -2463,1 +2476,1 @@
+     }
+ 
+     const int servicePort = MkPort("127.0.0.1");
+@@ -2463,3 +2475,3 @@
+             injected.resolve = QJsonObject{
 -                {"inbound", QJsonArray{tags::mixedIn, tags::tunIn}},
 +                {"inbound", QJsonArray{tags::mixedIn, httpIn, tags::tunIn}},
+                 {"action", "resolve"},
+                 {"strategy", settings.resolve_domain_strategy},
 diff --git a/src/ui/setting/dialog_basic_settings.cpp b/src/ui/setting/dialog_basic_settings.cpp
 --- a/src/ui/setting/dialog_basic_settings.cpp
 +++ b/src/ui/setting/dialog_basic_settings.cpp
-@@ -256,1 +257,1 @@
+@@ -253,7 +253,7 @@
+     form->attachStatus(ui->buttonBox);
+     ADD_ASTERISK(this);
+ 
 -    ui->inbound_socks_port_l->setText(ui->inbound_socks_port_l->text().replace("Socks", "Mixed (SOCKS+HTTP)"));
 +    ui->inbound_socks_port_l->setText(tr("SOCKS5 port (default 7891)"));
-@@ -727,1 +727,1 @@
+     ui->log_level->addItems(Configs::SingBox::LogLevels);
+     ui->xray_loglevel->addItems(Configs::Xray::XrayLogLevels);
+@@ -724,6 +724,8 @@
+     inboundLayout->addWidget(makeFieldRow(tr("Listen address"), {}, ui->inbound_address));
 -    inboundLayout->addWidget(makeFieldRow(tr("Mixed port"), tr("SOCKS and HTTP on one local port"), ui->inbound_socks_port));
 +    inboundLayout->addWidget(makeFieldRow(tr("SOCKS5 port"), tr("SOCKS5 listener; HTTP CONNECT uses 127.0.0.1:7890"), ui->inbound_socks_port));
-@@ -729,1 +729,1 @@
+     inboundLayout->addWidget(makeFieldRow(tr("Random port"), tr("Choose a free port on every start"), makeToggle(ui->random_listen_port)));
 -    inboundLayout->addWidget(makeFieldRow(tr("Disable mixed inbound"), tr("Do not expose the local mixed proxy endpoint"), makeToggle(ui->disable_mixed_inbound)));
 +    inboundLayout->addWidget(makeFieldRow(tr("Disable local proxy listeners"), tr("Disable both local HTTP and SOCKS5 endpoints"), makeToggle(ui->disable_mixed_inbound)));
+     inboundLayout->addWidget(makeFieldRow(tr("Authentication"), tr("Require credentials for local proxy clients"), makeToggle(ui->inbound_auth)));
