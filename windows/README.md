@@ -25,3 +25,6 @@ A separate Windows desktop client for the Auto Connect project. The Android app 
 ## Current implementation status
 
 The Windows client is being developed independently under this directory. Do not treat this README or a successful compile as proof of runtime proxy functionality. Each release must pass build, unit/integration tests, and a Windows 10 smoke test.
+
+
+Windows release packaging also bundles the official sing-box Windows amd64 executable; the CI job records its release tag in `CORE-VERSION.txt`.
