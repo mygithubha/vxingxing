@@ -34,7 +34,7 @@ diff --git a/src/engine/EngineHost.cpp b/src/engine/EngineHost.cpp
 index 0000000..0000000 100644
 --- a/src/engine/EngineHost.cpp
 +++ b/src/engine/EngineHost.cpp
-@@ -318,7 +318,9 @@ void EngineHost::init(EnginePolicy *frontEnd, TestObserver *testObserver, std::o
+@@ -316,7 +316,9 @@ void EngineHost::init(EnginePolicy *frontEnd, TestObserver *testObserver, std::o
  
      if (bootStart) {
 -        if (bootStart->profileId >= 0) m_connection->setBootStart(StartRequest{bootStart->profileId, false, bootStart->serial});
