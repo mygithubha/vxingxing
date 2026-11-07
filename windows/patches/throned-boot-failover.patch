@@ -57,16 +57,31 @@ index 0000000..0000000 100644
  #include <memory>
  #include <utility>
  
-@@ -163,5 +164,8 @@ void ConnectionManager::start(const StartRequest &request) {
+@@ -163,5 +164,7 @@ void ConnectionManager::start(const StartRequest &request) {
      }
++    auto startFailed = std::make_shared<std::atomic<bool>>(false);
      const auto finish = [=, this](StartOutcome outcome, const QString &error) {
          if (!error.isEmpty()) MW_show_log(error);
--        runOnUiThread([=, this] { emit startFinished(resolved.serial, resolved.profileId, outcome, error); });
-+        runOnUiThread([=, this] {
-+            emit startFinished(resolved.serial, resolved.profileId, outcome, error);
-+            tryBootFailover(resolved, outcome);
-+        });
++        if (outcome == StartOutcome::StartFailed) startFailed->store(true);
+         runOnUiThread([=, this] { emit startFinished(resolved.serial, resolved.profileId, outcome, error); });
      };
+@@ -380,15 +380,16 @@ void ConnectionManager::start(const StartRequest &request) {
+         runOnUiThread([=, this] {
+             slowStart.dismiss();
+             m_profileConnecting = false;
+             syncState();
+             emit busyChanged();
+             if (started) {
+                 emit runMarker(markerAt, switching ? RunMarker::Switched : RunMarker::Started,
+                                ent->outbound ? ent->outbound->DisplayName() : ent->name);
+             } else if (switching) {
+                 emit runMarker(markerAt, RunMarker::Stopped, {});
+             }
++            if (!started && startFailed->load()) tryBootFailover(resolved, StartOutcome::StartFailed);
+         });
+     });
+ }
+ 
 @@ -519,9 +523,65 @@ void ConnectionManager::failStart(const StartRequest &request, StartOutcome outc
      emit startFinished(request.serial, request.profileId, outcome, error);
 +    tryBootFailover(request, outcome);
