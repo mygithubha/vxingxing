@@ -29,3 +29,13 @@ The upstream workflow is a detailed multi-job pipeline, not a single CMake comma
 ## Pinned upstream revision
 
 `windows/throned` is pinned to `fbdc7a69cb2ccddc3915dc4de7ec50313a974f13` in the Auto Connect branch. Changes inside the submodule require a maintained fork or an explicit patch/build overlay; editing the submodule working tree alone will not create a durable change in the parent repository.
+
+
+## 2026-11-07 follow-up implementation
+
+- Added `windows/patches/throned-dual-inbound.patch`: converts the public mixed inbound into separate SOCKS5 and HTTP inbounds, with default ports 7891 and 7890 respectively. The existing optional authentication is applied to both; the configured listen address defaults to loopback.
+- Updated the existing settings UI labels to describe the two listeners.
+- Added `windows/scripts/apply-throned-patches.sh`, which refuses to patch a different upstream commit, applies the patch, checks whitespace, and verifies the expected generated listener declarations.
+- Added `.github/workflows/windows-patch-validation.yml` to run the patch check when the Windows implementation changes.
+- The patch has been committed but has not yet been demonstrated by a successful GitHub Actions run, native compilation, or Windows 10 runtime test.
+- Node persistence is already partially present upstream: `ConnectionManager::start` persists the profile ID after the core accepts the real start, and the boot selector supports last-used or lowest cached latency. Active health-check-before-start and retry-on-failure are still outstanding.
