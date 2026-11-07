@@ -1,0 +1,131 @@
+diff --git a/include/engine/EngineTypes.h b/include/engine/EngineTypes.h
+index 0000000..0000000 100644
+--- a/include/engine/EngineTypes.h
++++ b/include/engine/EngineTypes.h
+@@ -25,6 +25,8 @@ struct StartRequest {
+     // Unattended callers get every failure through startFinished and the log, never a dialog.
+     bool interactive = true;
+     quint64 serial = 0;
++    // Only the boot-restored profile may trigger one automatic same-group fallback.
++    bool bootFailover = false;
+ };
+ 
+ struct StopOptions {
+diff --git a/include/engine/connection/ConnectionManager.h b/include/engine/connection/ConnectionManager.h
+index 0000000..0000000 100644
+--- a/include/engine/connection/ConnectionManager.h
++++ b/include/engine/connection/ConnectionManager.h
+@@ -105,6 +105,7 @@ private:
+     void onCoreGaveUp(const QString &reason);
+ 
+     void failStart(const StartRequest &request, StartOutcome outcome, const QString &title, const QString &error);
++    void tryBootFailover(const StartRequest &request, StartOutcome outcome);
+ 
+     void deferStartToCore(const StartRequest &request);
+ 
+@@ -154,6 +155,7 @@ private:
+     // The boot request's serial until the first coreStarted; only that request is refused while the Tun is held.
+     quint64 m_bootSerial = 0;
++    bool m_bootFailoverAttempted = false;
+     int m_geoRetriedProfile = -1;
+     // Any thread: bumped by start() and every manual stop.
+     std::atomic<quint64> m_geoRetryToken{0};
+diff --git a/src/engine/EngineHost.cpp b/src/engine/EngineHost.cpp
+index 0000000..0000000 100644
+--- a/src/engine/EngineHost.cpp
++++ b/src/engine/EngineHost.cpp
+@@ -318,7 +318,7 @@ void EngineHost::init(EnginePolicy *frontEnd, TestObserver *testObserver, std::o
+ 
+     if (bootStart) {
+-        if (bootStart->profileId >= 0) m_connection->setBootStart(StartRequest{bootStart->profileId, false, bootStart->serial});
++        if (bootStart->profileId >= 0) m_connection->setBootStart(StartRequest{bootStart->profileId, false, bootStart->serial, true});
+         m_coreSupervisor->start(bootStart->profileId);
+     } else {
+         const auto &startSettings = Configs::dataManager->settingsRepo;
+diff --git a/src/engine/connection/ConnectionManager.cpp b/src/engine/connection/ConnectionManager.cpp
+index 0000000..0000000 100644
+--- a/src/engine/connection/ConnectionManager.cpp
++++ b/src/engine/connection/ConnectionManager.cpp
+@@ -38,6 +38,7 @@
+ #include <algorithm>
+ #include <functional>
++#include <limits>
+ #include <memory>
+ #include <utility>
+ 
+@@ -163,7 +164,10 @@ void ConnectionManager::start(const StartRequest &request) {
+     }
+     const auto finish = [=, this](StartOutcome outcome, const QString &error) {
+         if (!error.isEmpty()) MW_show_log(error);
+-        runOnUiThread([=, this] { emit startFinished(resolved.serial, resolved.profileId, outcome, error); });
++        runOnUiThread([=, this] {
++            emit startFinished(resolved.serial, resolved.profileId, outcome, error);
++            tryBootFailover(resolved, outcome);
++        });
+     };
+@@ -519,6 +523,54 @@ void ConnectionManager::failStart(const StartRequest &request, StartOutcome outc
+     emit startFinished(request.serial, request.profileId, outcome, error);
++    tryBootFailover(request, outcome);
+     if (request.interactive) {
+         policy()->startFailed(request, outcome, title, error);
+     } else {
+         MW_show_log(title + ": " + error);
+     }
+ }
+ 
++void ConnectionManager::tryBootFailover(const StartRequest &request, StartOutcome outcome) {
++    ENGINE_CHECK_MAIN_THREAD();
++    if (!request.bootFailover || outcome != StartOutcome::StartFailed || m_bootFailoverAttempted) return;
++    m_bootFailoverAttempted = true;
++    if (m_tests == nullptr) return;
++
++    const auto failedProfile = Configs::dataManager->profilesRepo->GetProfile(request.profileId);
++    if (failedProfile == nullptr) return;
++    const int groupId = failedProfile->gid;
++    const auto group = Configs::dataManager->groupsRepo->GetGroup(groupId);
++    if (group == nullptr || group->archive) return;
++
++    QList<int> candidates;
++    for (const int id : group->Profiles()) {
++        if (id == request.profileId) continue;
++        const auto profile = Configs::dataManager->profilesRepo->GetProfile(id);
++        if (profile != nullptr && profile->gid == groupId && profile->outbound != nullptr) candidates.push_back(id);
++    }
++    if (candidates.isEmpty()) {
++        MW_show_log(QStringLiteral("[Auto Connect] The remembered node failed, and this group has no fallback candidates."));
++        return;
++    }
++
++    MW_show_log(QStringLiteral("[Auto Connect] The remembered node failed; actively testing %1 alternatives...")
++                    .arg(candidates.size()));
++    m_tests->queueUrlTests(candidates, [this, candidates, failedId = request.profileId, groupId] {
++        runOnUiThread([this, candidates, failedId, groupId] {
++            // A manual start or stop during testing always wins over this background recovery.
++            if (m_lastProfileId != failedId || connectionState() != ConnectionState::Idle) return;
++            const auto currentGroup = Configs::dataManager->groupsRepo->GetGroup(groupId);
++            if (currentGroup == nullptr || currentGroup->archive) return;
++
++            int bestId = -1;
++            int bestLatency = std::numeric_limits<int>::max();
++            for (const int id : candidates) {
++                const auto profile = Configs::dataManager->profilesRepo->GetProfile(id);
++                if (profile == nullptr || profile->gid != groupId || !profile->IsWorking()) continue;
++                const int score = profile->latency > 0 ? profile->latency : std::numeric_limits<int>::max() - 1;
++                if (score < bestLatency) {
++                    bestLatency = score;
++                    bestId = id;
++                }
++            }
++            if (bestId < 0) {
++                MW_show_log(QStringLiteral("[Auto Connect] No alternative node passed the URL reachability test."));
++                return;
++            }
++            MW_show_log(QStringLiteral("[Auto Connect] Switching to the best tested alternative (profile %1, %2 ms).")
++                            .arg(bestId)
++                            .arg(bestLatency == std::numeric_limits<int>::max() - 1 ? 0 : bestLatency));
++            start(StartRequest{bestId, false, 0});
++        });
++    }, false);
++}
++
+ void ConnectionManager::deferStartToCore(const StartRequest &request) {
