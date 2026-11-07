@@ -17,10 +17,10 @@ if [[ "$ACTUAL" != "$EXPECTED" ]]; then
   exit 3
 fi
 
-if git -C "$THRONED" apply --check "$PATCH"; then
-  git -C "$THRONED" apply "$PATCH"
+if (cd "$THRONED" && git apply --check "$PATCH"); then
+  (cd "$THRONED" && git apply "$PATCH")
   echo "Applied Auto Connect dual-listener patch."
-elif git -C "$THRONED" diff --quiet; then
+elif (cd "$THRONED" && git diff --quiet); then
   echo "ERROR: patch does not apply cleanly to pinned Throned revision." >&2
   exit 4
 else
@@ -28,7 +28,7 @@ else
   exit 5
 fi
 
-git -C "$THRONED" diff --check
+(cd "$THRONED" && git diff --check)
 
 GEN="$THRONED/src/configs/generate.cpp"
 SETTINGS="$THRONED/include/database/SettingsRepo.h"
