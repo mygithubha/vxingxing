@@ -24,6 +24,18 @@ jobs:
           dotnet-version: 8.0.x
       - name: Build self-contained Windows x64 app
         run: dotnet publish windows/AutoConnect.Windows/AutoConnect.Windows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+      - name: Download official sing-box Windows core
+        shell: pwsh
+        run: |
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/SagerNet/sing-box/releases/latest" -Headers @{ "Accept" = "application/vnd.github+json"; "X-GitHub-Api-Version" = "2022-11-28" }
+          $asset = $release.assets | Where-Object { $_.name -match 'windows-amd64.*\.zip$' } | Select-Object -First 1
+          if (-not $asset) { throw "No official sing-box Windows amd64 ZIP found in latest release." }
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "$env:RUNNER_TEMP\sing-box.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\sing-box.zip" -DestinationPath "$env:RUNNER_TEMP\sing-box" -Force
+          $exe = Get-ChildItem "$env:RUNNER_TEMP\sing-box" -Filter "sing-box.exe" -Recurse | Select-Object -First 1
+          if (-not $exe) { throw "sing-box.exe missing from downloaded archive." }
+          Copy-Item $exe.FullName "publish\sing-box.exe"
+          "Included sing-box release: $($release.tag_name)" | Out-File "publish\CORE-VERSION.txt"
       - name: Upload Windows app
         uses: actions/upload-artifact@v4
         with:
