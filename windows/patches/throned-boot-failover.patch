@@ -34,7 +34,7 @@ diff --git a/src/engine/EngineHost.cpp b/src/engine/EngineHost.cpp
 index 0000000..0000000 100644
 --- a/src/engine/EngineHost.cpp
 +++ b/src/engine/EngineHost.cpp
-@@ -318,6 +318,6 @@ void EngineHost::init(EnginePolicy *frontEnd, TestObserver *testObserver, std::o
+@@ -318,7 +318,9 @@ void EngineHost::init(EnginePolicy *frontEnd, TestObserver *testObserver, std::o
  
      if (bootStart) {
 -        if (bootStart->profileId >= 0) m_connection->setBootStart(StartRequest{bootStart->profileId, false, bootStart->serial});
@@ -42,6 +42,10 @@ index 0000000..0000000 100644
          m_coreSupervisor->start(bootStart->profileId);
      } else {
          const auto &startSettings = Configs::dataManager->settingsRepo;
+-        m_coreSupervisor->start(startSettings->remember_enable && startSettings->remember_id >= 0 ? startSettings->remember_id : -1);
++        const int resumeId = startSettings->remember_enable && startSettings->remember_id >= 0 ? startSettings->remember_id : -1;
++        if (resumeId >= 0) m_connection->setBootStart(StartRequest{resumeId, false, 0, true});
++        m_coreSupervisor->start(resumeId);
 diff --git a/src/engine/connection/ConnectionManager.cpp b/src/engine/connection/ConnectionManager.cpp
 index 0000000..0000000 100644
 --- a/src/engine/connection/ConnectionManager.cpp
