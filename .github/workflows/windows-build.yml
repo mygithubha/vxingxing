@@ -120,8 +120,8 @@ jobs:
         working-directory: windows/throned
         shell: bash
         run: |
-          7z x qt.7z -o"$PWD/Qt"
-          7z x openssl.7z -o"$PWD/openssl"
+          7z x qt.7z
+          7z x openssl.7z
           export CMAKE_PREFIX_PATH="$PWD/Qt/lib/cmake"
           export OPENSSL_ROOT_DIR="$PWD/openssl"
           mkdir build
