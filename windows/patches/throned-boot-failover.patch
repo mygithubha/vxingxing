@@ -82,7 +82,7 @@ index 0000000..0000000 100644
      });
  }
  
-@@ -519,9 +523,65 @@ void ConnectionManager::failStart(const StartRequest &request, StartOutcome outc
+@@ -519,9 +523,67 @@ void ConnectionManager::failStart(const StartRequest &request, StartOutcome outc
      emit startFinished(request.serial, request.profileId, outcome, error);
 +    tryBootFailover(request, outcome);
      if (request.interactive) {
@@ -117,10 +117,12 @@ index 0000000..0000000 100644
 +
 +    MW_show_log(QStringLiteral("[Auto Connect] The remembered node failed; actively testing %1 alternatives...")
 +                    .arg(candidates.size()));
-+    m_tests->queueUrlTests(candidates, [this, candidates, failedId = request.profileId, groupId] {
-+        runOnUiThread([this, candidates, failedId, groupId] {
++    const quint64 failoverToken = m_geoRetryToken.load();
++    m_tests->queueUrlTests(candidates, [this, candidates, failedId = request.profileId, groupId, failoverToken] {
++        runOnUiThread([this, candidates, failedId, groupId, failoverToken] {
 +            // A manual start or stop during testing always wins over this background recovery.
-+            if (m_lastProfileId != failedId || connectionState() != ConnectionState::Idle) return;
++            if (m_geoRetryToken.load() != failoverToken || m_lastProfileId != failedId ||
++                connectionState() != ConnectionState::Idle) return;
 +            const auto currentGroup = Configs::dataManager->groupsRepo->GetGroup(groupId);
 +            if (currentGroup == nullptr || currentGroup->archive) return;
 +
