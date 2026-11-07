@@ -1,0 +1,33 @@
+name: Windows Desktop CI
+
+on:
+  push:
+    branches:
+      - feature/windows10-client
+    paths:
+      - "windows/**"
+      - ".github/workflows/windows-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build self-contained Windows x64 app
+        run: dotnet publish windows/AutoConnect.Windows/AutoConnect.Windows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+      - name: Upload Windows app
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoConnect-Windows10-x64
+          path: publish/
+          if-no-files-found: error
+          retention-days: 14
