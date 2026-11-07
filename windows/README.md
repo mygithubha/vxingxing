@@ -12,7 +12,7 @@ The repository now pins the public **Throned** Qt desktop client as a Git submod
 - Pinned revision: `fbdc7a69cb2ccddc3915dc4de7ec50313a974f13`
 - Throned is an unofficial Throne desktop fork, GPL-3.0, with Windows and Linux support.
 
-This is a better foundation than rewriting the Android application as a Windows app. Throned already contains a Windows build pipeline, native Windows system-proxy integration, subscription/profile parsing, sing-box configuration generation, mixed HTTP/SOCKS inbound support, and TUN mode. Its README also documents reconnect-on-start choices including the last profile and fastest measured profile.
+This is a better foundation than rewriting the Android application as a Windows app. Throned already contains a Windows build pipeline, native Windows system-proxy integration, subscription/profile parsing, sing-box configuration generation, one mixed HTTP/SOCKS inbound (both protocols currently share a port), and TUN mode. Separate HTTP and SOCKS5 listeners are an Auto Connect customization still to implement. Its README also documents reconnect-on-start choices including the last profile and fastest measured profile.
 
 ## Auto Connect requirements to implement on top of the desktop base
 
@@ -37,7 +37,7 @@ This is a better foundation than rewriting the Android application as a Windows 
 | TUN global | Route device traffic through the TUN interface; requires Windows-specific driver/permission validation |
 | Optional LAN share | Explicitly enabled, authenticated listener for other devices on the LAN |
 
-A mixed inbound can accept both HTTP CONNECT and SOCKS5, but the product should expose independently configurable HTTP and SOCKS5 endpoints for easier browser-extension setup.
+The current upstream mixed inbound accepts HTTP CONNECT and SOCKS5 on one shared port. It does **not** yet provide the two independent public listeners required by Auto Connect; implement HTTP `127.0.0.1:7890` and SOCKS5 `127.0.0.1:7891` as separate inbounds.
 
 ## Security defaults
 
