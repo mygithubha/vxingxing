@@ -1,0 +1,198 @@
+name: Auto Connect Windows x64 build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version label shown in the installer
+        required: false
+        default: dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-connect-windows-build
+  cancel-in-progress: false
+
+jobs:
+  core-windows:
+    runs-on: ubuntu-22.04
+    env:
+      DEST: ${{ github.workspace }}/windows/throned/deployment/windows-amd64
+    steps:
+      - name: Checkout repository and pinned Throned source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.0"
+          cache-dependency-path: windows/throned/core/go.sum
+      - name: Set up protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "31.1"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install protobuf generators
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
+      - name: Build Windows x64 core
+        working-directory: windows/throned
+        shell: bash
+        run: GOOS=windows GOARCH=amd64 ./script/build_go.sh
+      - name: Pack core artifact
+        working-directory: windows/throned
+        run: tar czf artifacts.tgz deployment
+      - name: Upload core artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-connect-core-windows-amd64
+          path: windows/throned/artifacts.tgz
+          compression-level: 0
+          if-no-files-found: error
+
+  windows:
+    needs: core-windows
+    runs-on: windows-latest
+    env:
+      INPUT_VERSION: ${{ inputs.version || 'dev' }}
+      DEST: ${{ github.workspace }}/windows/throned/deployment/windows-amd64
+      GITHUB_WORKSPACE: ${{ github.workspace }}
+      LAUNCHER_ARGS: -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+    steps:
+      - name: Checkout repository and pinned Throned source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Apply Auto Connect source patch
+        shell: bash
+        run: bash windows/scripts/apply-throned-patches.sh
+      - name: Configure MSVC x64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Configure compiler cache
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        with:
+          key: auto-connect-windows-amd64-qt-6.11.2
+          variant: sccache
+          max-size: 500M
+      - name: Download Windows core artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: auto-connect-core-windows-amd64
+          path: windows/throned/download-artifact
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.0"
+          cache-dependency-path: windows/throned/core/go.sum
+      - name: Set up protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "31.1"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate core protobuf
+        working-directory: windows/throned
+        shell: bash
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
+          cd core/gen
+          protoc -I . --go_out=. --go-grpc_out=. libcore.proto
+      - name: Test Windows core
+        working-directory: windows/throned
+        shell: bash
+        run: cd core && go test $(go list ./... | grep -v /internal/boxdns/winipcfg)
+      - name: Test updater
+        working-directory: windows/throned/updater
+        run: go test ./...
+      - name: Download Qt and OpenSSL
+        shell: bash
+        run: |
+          curl -fLso qt.7z https://github.com/throneproj/buildqt/releases/download/Qt_6.11.2/Qt_6.11.2_x64.7z
+          curl -fLso openssl.7z https://github.com/throneproj/env_windows_legacy/releases/download/latest/openssl_x64.7z
+      - name: Build and test portable application
+        working-directory: windows/throned
+        shell: bash
+        run: |
+          7z x qt.7z -o"$GITHUB_WORKSPACE/windows/throned/Qt"
+          7z x openssl.7z -o"$GITHUB_WORKSPACE/windows/throned/openssl"
+          export CMAKE_PREFIX_PATH="$PWD/Qt/lib/cmake"
+          export OPENSSL_ROOT_DIR="$PWD/openssl"
+          mkdir build
+          cd build
+          curl -fLso srslist.h https://raw.githubusercontent.com/throneproj/routeprofiles/rule-set/srslist.h
+          cmake -GNinja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTHRONED_PRECOMPILE_HEADERS=OFF -DTHRONED_UNITY_BUILD=OFF $LAUNCHER_ARGS ..
+          ninja throned-unit-tests
+          ctest --output-on-failure --no-tests=error -R '_tests$'
+          ninja
+          ctest --output-on-failure --no-tests=ignore -E '_tests$'
+          cd ..
+          ./script/deploy_windows.sh
+      - name: Upload portable Windows x64 build
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-connect-windows-x64-portable
+          path: windows/throned/deployment/windows-amd64
+          if-no-files-found: error
+          compression-level: 6
+
+  windows-installer:
+    needs: windows
+    runs-on: ubuntu-22.04
+    env:
+      INPUT_VERSION: ${{ inputs.version || 'dev' }}
+    steps:
+      - name: Checkout repository and pinned Throned source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Download portable Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: auto-connect-windows-x64-portable
+          path: windows/throned/deployment/windows-amd64
+      - name: Install NSIS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nsis
+      - name: Build Windows installer
+        working-directory: windows/throned
+        shell: bash
+        run: |
+          safe_version="${INPUT_VERSION//[^[:alnum:]._-]/-}"
+          numeric_version="${INPUT_VERSION#v}"
+          numeric_version="${numeric_version#V}"
+          numeric_version="${numeric_version%%-*}"
+          IFS='.' read -r raw_major raw_minor raw_patch raw_build <<< "$numeric_version"
+          version_component() {
+            local value="${1:-0}"
+            if [[ "$value" =~ ^[0-9]+$ ]] && (( 10#$value <= 65535 )); then
+              echo "$((10#$value))"
+            else
+              echo 0
+            fi
+          }
+          major="$(version_component "${raw_major:-}")"
+          minor="$(version_component "${raw_minor:-}")"
+          patch="$(version_component "${raw_patch:-}")"
+          build="$(version_component "${raw_build:-}")"
+          makensis -NOCD \
+            -DTHRONED_X64_ONLY \
+            -DAPP_VERSION="$INPUT_VERSION" \
+            -DAPP_VERSION_MAJOR="$major" \
+            -DAPP_VERSION_MINOR="$minor" \
+            -DAPP_VERSION_PATCH="$patch" \
+            -DAPP_VERSION_BUILD="$build" \
+            -DOUTPUT_FILE="Auto-Connect-${safe_version}-windows-x64-setup.exe" \
+            script/windows_installer.nsi
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-connect-windows-x64-installer
+          path: windows/throned/Auto-Connect-*-windows-x64-setup.exe
+          if-no-files-found: error
