@@ -34,13 +34,10 @@ diff --git a/src/engine/EngineHost.cpp b/src/engine/EngineHost.cpp
 index 0000000..0000000 100644
 --- a/src/engine/EngineHost.cpp
 +++ b/src/engine/EngineHost.cpp
-@@ -316,7 +316,9 @@ void EngineHost::init(EnginePolicy *frontEnd, TestObserver *testObserver, std::o
- 
-     if (bootStart) {
+@@ -318,1 +318,1 @@
 -        if (bootStart->profileId >= 0) m_connection->setBootStart(StartRequest{bootStart->profileId, false, bootStart->serial});
 +        if (bootStart->profileId >= 0) m_connection->setBootStart(StartRequest{bootStart->profileId, false, bootStart->serial, true});
-         m_coreSupervisor->start(bootStart->profileId);
-     } else {
+@@ -321,2 +321,4 @@
          const auto &startSettings = Configs::dataManager->settingsRepo;
 -        m_coreSupervisor->start(startSettings->remember_enable && startSettings->remember_id >= 0 ? startSettings->remember_id : -1);
 +        const int resumeId = startSettings->remember_enable && startSettings->remember_id >= 0 ? startSettings->remember_id : -1;
