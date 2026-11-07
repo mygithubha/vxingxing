@@ -21,7 +21,7 @@ diff --git a/src/configs/generate.cpp b/src/configs/generate.cpp
  constexpr auto serviceIn = "throned-service-in";
  constexpr auto tunIn = "tun-in";
  constexpr auto xrayFullConfigIn = "throne-bridge";
-@@ -1449,15 +1450,27 @@
+@@ -1449,16 +1450,27 @@
      if (!settings.disable_mixed_inbound) {
 -        QJsonObject inboundObj;
 -        inboundObj["tag"] = tags::mixedIn;
@@ -61,7 +61,7 @@ diff --git a/src/configs/generate.cpp b/src/configs/generate.cpp
      }
  
      const int servicePort = MkPort("127.0.0.1");
-@@ -2463,3 +2475,3 @@
+@@ -2463,4 +2475,4 @@
              injected.resolve = QJsonObject{
 -                {"inbound", QJsonArray{tags::mixedIn, tags::tunIn}},
 +                {"inbound", QJsonArray{tags::mixedIn, httpIn, tags::tunIn}},
@@ -70,7 +70,7 @@ diff --git a/src/configs/generate.cpp b/src/configs/generate.cpp
 diff --git a/src/ui/setting/dialog_basic_settings.cpp b/src/ui/setting/dialog_basic_settings.cpp
 --- a/src/ui/setting/dialog_basic_settings.cpp
 +++ b/src/ui/setting/dialog_basic_settings.cpp
-@@ -253,7 +253,7 @@
+@@ -253,6 +253,6 @@
      form->attachStatus(ui->buttonBox);
      ADD_ASTERISK(this);
  
@@ -78,7 +78,7 @@ diff --git a/src/ui/setting/dialog_basic_settings.cpp b/src/ui/setting/dialog_ba
 +    ui->inbound_socks_port_l->setText(tr("SOCKS5 port (default 7891)"));
      ui->log_level->addItems(Configs::SingBox::LogLevels);
      ui->xray_loglevel->addItems(Configs::Xray::XrayLogLevels);
-@@ -724,6 +724,8 @@
+@@ -724,5 +724,5 @@
      inboundLayout->addWidget(makeFieldRow(tr("Listen address"), {}, ui->inbound_address));
 -    inboundLayout->addWidget(makeFieldRow(tr("Mixed port"), tr("SOCKS and HTTP on one local port"), ui->inbound_socks_port));
 +    inboundLayout->addWidget(makeFieldRow(tr("SOCKS5 port"), tr("SOCKS5 listener; HTTP CONNECT uses 127.0.0.1:7890"), ui->inbound_socks_port));
