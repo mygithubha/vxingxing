@@ -52,7 +52,7 @@ diff --git a/src/configs/generate.cpp b/src/configs/generate.cpp
 +            {"users", users},
 +        };
 +        inbounds += QJsonObject{
-+            {"tag", httpIn},
++            {"tag", tags::httpIn},
 +            {"type", "http"},
 +            {"listen", settings.inbound_address},
 +            {"listen_port", 7890},
@@ -64,7 +64,7 @@ diff --git a/src/configs/generate.cpp b/src/configs/generate.cpp
 @@ -2463,4 +2475,4 @@
              injected.resolve = QJsonObject{
 -                {"inbound", QJsonArray{tags::mixedIn, tags::tunIn}},
-+                {"inbound", QJsonArray{tags::mixedIn, httpIn, tags::tunIn}},
++                {"inbound", QJsonArray{tags::mixedIn, tags::httpIn, tags::tunIn}},
                  {"action", "resolve"},
                  {"strategy", settings.resolve_domain_strategy},
 diff --git a/src/ui/setting/dialog_basic_settings.cpp b/src/ui/setting/dialog_basic_settings.cpp
