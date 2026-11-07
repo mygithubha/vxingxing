@@ -12,7 +12,7 @@ diff --git a/src/configs/generate.cpp b/src/configs/generate.cpp
 @@ -58,1 +58,2 @@
  constexpr auto mixedIn = "mixed-in";
 +constexpr auto httpIn = "http-in";
-@@ -1449,14 +1450,24 @@
+@@ -1449,15 +1450,25 @@
      if (!settings.disable_mixed_inbound) {
 -        QJsonObject inboundObj;
 -        inboundObj["tag"] = tags::mixedIn;
@@ -50,7 +50,7 @@ diff --git a/src/configs/generate.cpp b/src/configs/generate.cpp
 +            {"listen_port", 7890},
 +            {"users", users},
 +        };
-@@ -2463,1 +2473,1 @@
+@@ -2463,1 +2474,1 @@
 -                {"inbound", QJsonArray{tags::mixedIn, tags::tunIn}},
 +                {"inbound", QJsonArray{tags::mixedIn, httpIn, tags::tunIn}},
 diff --git a/src/ui/setting/dialog_basic_settings.cpp b/src/ui/setting/dialog_basic_settings.cpp
