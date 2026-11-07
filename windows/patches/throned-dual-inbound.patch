@@ -1,7 +1,7 @@
 diff --git a/include/database/SettingsRepo.h b/include/database/SettingsRepo.h
 --- a/include/database/SettingsRepo.h
 +++ b/include/database/SettingsRepo.h
-@@
+@@ -283,1 +283,3 @@
 -    int inbound_socks_port = 2080; // Mixed, actually
 +    // Auto Connect: stable loopback proxy ports. The legacy setting name is
 +    // retained for database compatibility; this is now the SOCKS5 listener.
@@ -9,10 +9,10 @@ diff --git a/include/database/SettingsRepo.h b/include/database/SettingsRepo.h
 diff --git a/src/configs/generate.cpp b/src/configs/generate.cpp
 --- a/src/configs/generate.cpp
 +++ b/src/configs/generate.cpp
-@@
+@@ -58,1 +58,2 @@
  constexpr auto mixedIn = "mixed-in";
 +constexpr auto httpIn = "http-in";
-@@
+@@ -1449,14 +1450,24 @@
      if (!settings.disable_mixed_inbound) {
 -        QJsonObject inboundObj;
 -        inboundObj["tag"] = tags::mixedIn;
@@ -50,18 +50,18 @@ diff --git a/src/configs/generate.cpp b/src/configs/generate.cpp
 +            {"listen_port", 7890},
 +            {"users", users},
 +        };
-@@
+@@ -2463,1 +2473,1 @@
 -                {"inbound", QJsonArray{tags::mixedIn, tags::tunIn}},
 +                {"inbound", QJsonArray{tags::mixedIn, httpIn, tags::tunIn}},
 diff --git a/src/ui/setting/dialog_basic_settings.cpp b/src/ui/setting/dialog_basic_settings.cpp
 --- a/src/ui/setting/dialog_basic_settings.cpp
 +++ b/src/ui/setting/dialog_basic_settings.cpp
-@@
+@@ -256,1 +257,1 @@
 -    ui->inbound_socks_port_l->setText(ui->inbound_socks_port_l->text().replace("Socks", "Mixed (SOCKS+HTTP)"));
 +    ui->inbound_socks_port_l->setText(tr("SOCKS5 port (default 7891)"));
-@@
+@@ -727,1 +727,1 @@
 -    inboundLayout->addWidget(makeFieldRow(tr("Mixed port"), tr("SOCKS and HTTP on one local port"), ui->inbound_socks_port));
 +    inboundLayout->addWidget(makeFieldRow(tr("SOCKS5 port"), tr("SOCKS5 listener; HTTP CONNECT uses 127.0.0.1:7890"), ui->inbound_socks_port));
-@@
+@@ -729,1 +729,1 @@
 -    inboundLayout->addWidget(makeFieldRow(tr("Disable mixed inbound"), tr("Do not expose the local mixed proxy endpoint"), makeToggle(ui->disable_mixed_inbound)));
 +    inboundLayout->addWidget(makeFieldRow(tr("Disable local proxy listeners"), tr("Disable both local HTTP and SOCKS5 endpoints"), makeToggle(ui->disable_mixed_inbound)));
