@@ -23,7 +23,7 @@ index 0000000..0000000 100644
  
      void deferStartToCore(const StartRequest &request);
  
-@@ -154,6 +155,7 @@ private:
+@@ -154,5 +155,6 @@ private:
      // The boot request's serial until the first coreStarted; only that request is refused while the Tun is held.
      quint64 m_bootSerial = 0;
 +    bool m_bootFailoverAttempted = false;
@@ -34,7 +34,7 @@ diff --git a/src/engine/EngineHost.cpp b/src/engine/EngineHost.cpp
 index 0000000..0000000 100644
 --- a/src/engine/EngineHost.cpp
 +++ b/src/engine/EngineHost.cpp
-@@ -318,7 +318,7 @@ void EngineHost::init(EnginePolicy *frontEnd, TestObserver *testObserver, std::o
+@@ -318,6 +318,6 @@ void EngineHost::init(EnginePolicy *frontEnd, TestObserver *testObserver, std::o
  
      if (bootStart) {
 -        if (bootStart->profileId >= 0) m_connection->setBootStart(StartRequest{bootStart->profileId, false, bootStart->serial});
@@ -46,14 +46,14 @@ diff --git a/src/engine/connection/ConnectionManager.cpp b/src/engine/connection
 index 0000000..0000000 100644
 --- a/src/engine/connection/ConnectionManager.cpp
 +++ b/src/engine/connection/ConnectionManager.cpp
-@@ -38,6 +38,7 @@
+@@ -38,5 +38,6 @@
  #include <algorithm>
  #include <functional>
 +#include <limits>
  #include <memory>
  #include <utility>
  
-@@ -163,7 +164,10 @@ void ConnectionManager::start(const StartRequest &request) {
+@@ -163,5 +164,8 @@ void ConnectionManager::start(const StartRequest &request) {
      }
      const auto finish = [=, this](StartOutcome outcome, const QString &error) {
          if (!error.isEmpty()) MW_show_log(error);
@@ -63,7 +63,7 @@ index 0000000..0000000 100644
 +            tryBootFailover(resolved, outcome);
 +        });
      };
-@@ -519,6 +523,54 @@ void ConnectionManager::failStart(const StartRequest &request, StartOutcome outc
+@@ -519,9 +523,65 @@ void ConnectionManager::failStart(const StartRequest &request, StartOutcome outc
      emit startFinished(request.serial, request.profileId, outcome, error);
 +    tryBootFailover(request, outcome);
      if (request.interactive) {
