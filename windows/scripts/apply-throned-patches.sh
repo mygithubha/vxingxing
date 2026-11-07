@@ -42,6 +42,8 @@ TYPES="$THRONED/include/engine/EngineTypes.h"
 
 grep -Fq '{"type", "socks"}' "$GEN" || { echo "Missing SOCKS5 inbound" >&2; exit 6; }
 grep -Fq '{"type", "http"}' "$GEN" || { echo "Missing HTTP inbound" >&2; exit 7; }
+grep -Fq '{"tag", tags::httpIn}' "$GEN" || { echo "HTTP inbound tag must use tags namespace" >&2; exit 14; }
+grep -Fq 'tags::mixedIn, tags::httpIn, tags::tunIn' "$GEN" || { echo "DNS resolve inbound list is missing the namespaced HTTP tag" >&2; exit 15; }
 grep -Fq '{"listen_port", 7890}' "$GEN" || { echo "HTTP port 7890 not configured" >&2; exit 8; }
 grep -Fq 'int inbound_socks_port = 7891;' "$SETTINGS" || { echo "SOCKS5 default port 7891 not configured" >&2; exit 9; }
 grep -Fq 'HTTP CONNECT uses 127.0.0.1:7890' "$UI" || { echo "Settings UI does not describe the HTTP endpoint" >&2; exit 10; }
