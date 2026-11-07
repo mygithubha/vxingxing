@@ -17,6 +17,7 @@ public sealed class MainForm : Form
     private string? _loadedConfig;
     private string? _generatedConfig;
     private bool _ownsSystemProxy;
+    private WindowsProxy.Snapshot? _previousProxy;
 
     public MainForm()
     {
@@ -94,12 +95,12 @@ public sealed class MainForm : Form
         {
             var source = JsonNode.Parse(await File.ReadAllTextAsync(_loadedConfig)) as JsonObject
                 ?? throw new InvalidDataException("无效的 JSON 配置。");
-            var inbounds = source["inbounds"] as JsonArray ?? new JsonArray();
+            var inbounds = source["inbounds"] as JsonArray;
+            if (inbounds is null) { inbounds = new JsonArray(); source["inbounds"] = inbounds; }
             RemoveManagedInbound(inbounds, "autoconnect-http");
             RemoveManagedInbound(inbounds, "autoconnect-socks5");
             inbounds.Add(new JsonObject { ["type"] = "http", ["tag"] = "autoconnect-http", ["listen"] = "127.0.0.1", ["listen_port"] = 2081 });
             inbounds.Add(new JsonObject { ["type"] = "socks", ["tag"] = "autoconnect-socks5", ["listen"] = "127.0.0.1", ["listen_port"] = 2082 });
-            source["inbounds"] = inbounds;
 
             _generatedConfig = Path.Combine(Path.GetTempPath(), $"autoconnect-{Guid.NewGuid():N}.json");
             await File.WriteAllTextAsync(_generatedConfig, source.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
@@ -118,6 +119,8 @@ public sealed class MainForm : Form
                 EnableRaisingEvents = true
             };
             _core.Start();
+            _core.BeginOutputReadLine();
+            _core.BeginErrorReadLine();
             await Task.Delay(1200);
             if (_core.HasExited) throw new InvalidOperationException("sing-box 启动失败：" + await _core.StandardError.ReadToEndAsync());
 
@@ -129,6 +132,7 @@ public sealed class MainForm : Form
 
             if (_systemProxy.Checked)
             {
+                _previousProxy = WindowsProxy.Capture();
                 WindowsProxy.SetHttpProxy("127.0.0.1:2081");
                 _ownsSystemProxy = true;
             }
@@ -151,7 +155,7 @@ public sealed class MainForm : Form
         try { if (_core is { HasExited: false }) { _core.Kill(true); _core.WaitForExit(2500); } } catch { }
         _core?.Dispose();
         _core = null;
-        if (_ownsSystemProxy) { WindowsProxy.Disable(); _ownsSystemProxy = false; }
+        if (_ownsSystemProxy) { WindowsProxy.Restore(_previousProxy); _previousProxy = null; _ownsSystemProxy = false; }
         if (_generatedConfig is not null) { try { File.Delete(_generatedConfig); } catch { } _generatedConfig = null; }
         _coreStatus.Text = "核心：未启动";
         _httpStatus.Text = "HTTP：127.0.0.1:2081（未启动）";
@@ -163,7 +167,14 @@ public sealed class MainForm : Form
 
 internal static class WindowsProxy
 {
-    private const string InternetSettings = @"Software\Microsoft\Windows\CurrentVersion\Internet Settings";
+    private const string InternetSettings = @"Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
+    public sealed record Snapshot(object? Enabled, object? Server, object? Override);
+
+    public static Snapshot Capture()
+    {
+        using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(InternetSettings, false);
+        return new Snapshot(key?.GetValue("ProxyEnable"), key?.GetValue("ProxyServer"), key?.GetValue("ProxyOverride"));
+    }
 
     public static void SetHttpProxy(string address)
     {
@@ -172,11 +183,31 @@ internal static class WindowsProxy
         key.SetValue("ProxyEnable", 1, Microsoft.Win32.RegistryValueKind.DWord);
         key.SetValue("ProxyServer", address, Microsoft.Win32.RegistryValueKind.String);
         key.SetValue("ProxyOverride", "<local>;127.0.0.1;localhost", Microsoft.Win32.RegistryValueKind.String);
+        NotifyProxyChanged();
     }
 
-    public static void Disable()
+    public static void Restore(Snapshot? snapshot)
     {
         using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(InternetSettings, true);
-        key?.SetValue("ProxyEnable", 0, Microsoft.Win32.RegistryValueKind.DWord);
+        if (key is null || snapshot is null) return;
+        RestoreValue(key, "ProxyEnable", snapshot.Enabled, Microsoft.Win32.RegistryValueKind.DWord);
+        RestoreValue(key, "ProxyServer", snapshot.Server, Microsoft.Win32.RegistryValueKind.String);
+        RestoreValue(key, "ProxyOverride", snapshot.Override, Microsoft.Win32.RegistryValueKind.String);
+        NotifyProxyChanged();
     }
+
+    private static void RestoreValue(Microsoft.Win32.RegistryKey key, string name, object? value, Microsoft.Win32.RegistryValueKind kind)
+    {
+        if (value is null) key.DeleteValue(name, false);
+        else key.SetValue(name, value, kind);
+    }
+
+    private static void NotifyProxyChanged()
+    {
+        InternetSetOption(IntPtr.Zero, 39, IntPtr.Zero, 0);
+        InternetSetOption(IntPtr.Zero, 37, IntPtr.Zero, 0);
+    }
+
+    [System.Runtime.InteropServices.DllImport("wininet.dll", SetLastError = true)]
+    private static extern bool InternetSetOption(IntPtr hInternet, int option, IntPtr buffer, int bufferLength);
 }
