@@ -39,3 +39,13 @@ The upstream workflow is a detailed multi-job pipeline, not a single CMake comma
 - Added `.github/workflows/windows-patch-validation.yml` to run the patch check when the Windows implementation changes.
 - The patch has been committed but has not yet been demonstrated by a successful GitHub Actions run, native compilation, or Windows 10 runtime test.
 - Node persistence is already partially present upstream: `ConnectionManager::start` persists the profile ID after the core accepts the real start, and the boot selector supports last-used or lowest cached latency. Active health-check-before-start and retry-on-failure are still outstanding.
+
+
+## 2026-11-07 build pipeline follow-up
+
+- GitHub Actions successfully applied the dual-listener patch against the pinned Throned revision in run `42365266421` (commit `1ba6fea04993f2bed7b9f4309f6bad0fa22c63a8`). This validates patch syntax, source context, the script's static checks, and the pinned submodule revision; it is not a C++ compile.
+- Added `.github/workflows/windows-build.yml`, a manual Windows x64 pipeline with separate Go core, Qt/MSVC desktop, and NSIS installer jobs. It is designed to publish two Actions artifacts: portable x64 directory and setup EXE.
+- Corrected the Windows job paths so the upstream deployment script sees the Throned submodule as its workspace, and preserved the upstream Qt/OpenSSL archive layout.
+- The build workflow has not yet been dispatched. No Windows executable or installer has been built or runtime-tested yet.
+- The desktop patch still needs native compilation and a config-generation test to confirm sing-box accepts both independent inbound objects with optional authentication. The current CI only checks patch application and static source markers.
+- Generic remembered-node preflight and fallback across ordinary subscription profiles are still not implemented. Upstream auto-selector health ranking is specific to auto-selector profiles and does not satisfy the general fallback requirement.
