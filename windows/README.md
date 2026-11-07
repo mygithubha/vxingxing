@@ -61,3 +61,28 @@ The current upstream mixed inbound accepts HTTP CONNECT and SOCKS5 on one shared
 ## Delivery rule
 
 A successful compile is not a successful proxy test. Do not label a build as ready until the executable, proxy listeners, system-proxy restoration, and Windows 10 smoke tests have passed.
+
+
+## Current Auto Connect patch
+
+The Windows branch now carries a source patch for the pinned Throned revision. It changes the public local proxy endpoints to:
+
+| Protocol | Address | Port |
+|---|---|---:|
+| HTTP CONNECT | `127.0.0.1` | `7890` |
+| SOCKS5 | `127.0.0.1` | `7891` |
+
+The SOCKS5 port remains configurable through the existing inbound setting. HTTP uses the fixed Auto Connect default port 7890. Both endpoints use the existing optional inbound authentication setting and bind to the configured listen address (default `127.0.0.1`). Do not change the listen address to a LAN interface unless you intentionally want to expose the proxy to other devices.
+
+Apply and statically verify the patch from the repository root:
+
+```bash
+git submodule update --init --recursive
+bash windows/scripts/apply-throned-patches.sh
+```
+
+GitHub Actions also runs this patch-application check on changes to `windows/**`. This is a source-patch validation only; it is not yet a successful Windows compilation or Windows 10 runtime test.
+
+## Node selection and failover status
+
+The pinned upstream already persists the last profile after the core accepts a start, and it supports a remembered-start policy that can choose the last profile or the lowest previously measured latency. That is useful groundwork, but it does not by itself prove the requested active startup health-check and automatic retry sequence. Auto Connect still needs a tested failover implementation that checks the remembered node, then probes alternatives when it is unavailable.
