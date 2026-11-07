@@ -1,0 +1,29 @@
+name: Windows patch validation
+
+on:
+  push:
+    branches:
+      - feature/windows10-desktop-client
+    paths:
+      - "windows/**"
+      - ".gitmodules"
+  pull_request:
+    paths:
+      - "windows/**"
+      - ".gitmodules"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-throned-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Auto Connect with pinned Throned submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Verify and apply Auto Connect patch
+        shell: bash
+        run: bash windows/scripts/apply-throned-patches.sh
