@@ -8,6 +8,7 @@ on:
       - "app/**"
       - "scripts/**"
       - "build.gradle.kts"
+      - "repositories.gradle.kts"
       - "settings.gradle.kts"
       - "gradle/**"
       - "buildScript/**"
@@ -48,7 +49,8 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-provider: basic
+          gradle-home-cache-includes: caches;notifications;wrapper/dists
+          cache-read-only: false
 
       - name: Build OSS debug APK
         run: |
