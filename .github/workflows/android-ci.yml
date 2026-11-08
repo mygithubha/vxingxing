@@ -49,7 +49,10 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-home-cache-includes: caches;notifications;wrapper/dists
+          gradle-home-cache-includes: |
+            caches
+            notifications
+            wrapper/dists
           cache-read-only: false
 
       - name: Build OSS debug APK
