@@ -64,3 +64,45 @@ jobs:
           name: auto-connect-oss-debug-${{ github.sha }}
           path: app/build/outputs/apk/oss/debug/*.apk
           if-no-files-found: error
+
+      - name: Check release signing configuration
+        id: release-signing
+        env:
+          SIGNING_KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_B64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        shell: bash
+        run: |
+          if [[ -n "$SIGNING_KEYSTORE_B64" && -n "$SIGNING_STORE_PASSWORD" && -n "$SIGNING_KEY_ALIAS" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "Signed OSS Release build enabled." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Signed OSS Release not built"
+              echo
+              echo "Configure repository Actions secrets: SIGNING_KEYSTORE_B64, SIGNING_STORE_PASSWORD, and SIGNING_KEY_ALIAS. SIGNING_KEY_PASSWORD is optional and defaults to the store password."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Build signed OSS release APK
+        if: steps.release-signing.outputs.configured == 'true'
+        env:
+          SIGNING_KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_B64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          UPDATE_SIGNER_SHA256: ${{ secrets.UPDATE_SIGNER_SHA256 }}
+        run: ./gradlew --no-daemon --stacktrace app:assembleOssRelease
+
+      - name: Run OSS release unit tests
+        if: steps.release-signing.outputs.configured == 'true'
+        run: ./gradlew --no-daemon app:testOssReleaseUnitTest
+
+      - name: Upload signed OSS release APK
+        if: steps.release-signing.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-connect-oss-release-${{ github.sha }}
+          path: app/build/outputs/apk/oss/release/*.apk
+          if-no-files-found: error
